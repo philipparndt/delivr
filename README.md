@@ -56,6 +56,29 @@ delivr rotato --input ./rotato-files --output ./frames
 delivr rotato --input ./rotato-files --output ./frames --dim 2064x2752
 ```
 
+### Download Apple Device Bezels (macOS)
+
+Download official Apple device bezels directly from Apple's CDN:
+
+```bash
+# Download all available bezels
+delivr frames download --output ./bezels
+
+# Download only iPhone 17
+delivr frames download --output ./bezels --device iphone-17
+
+# List available devices
+delivr frames download --list
+```
+
+### Import Device Bezels to Templates
+
+Convert bezel PNGs (downloaded or custom) into device template sets:
+
+```bash
+delivr frames --input ./bezels --output ./frames
+```
+
 ### Deliver to App Store Connect
 
 ```bash
