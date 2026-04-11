@@ -141,13 +141,16 @@ func (p *ProgressTracker) render() {
 
 		styledRuntime := p.pendingStyle.Render(runtimePadded)
 
+		// Determine job state
+		isDone := strings.HasPrefix(j.Step, StepDone)
+		isFailed := j.Step == StepFailed
+		isPending := j.Step == StepPending
+
 		// Style the step
 		var styledStep string
-		switch j.Step {
-		case StepDone:
-			styledStep = p.doneStyle.Render("Done")
-		case StepFailed:
-			// Show only a short error in the status line
+		if isDone {
+			styledStep = p.doneStyle.Render(j.Step)
+		} else if isFailed {
 			errMsg := j.Error
 			if idx := strings.Index(errMsg, "\n"); idx > 0 {
 				errMsg = errMsg[:idx]
@@ -156,22 +159,21 @@ func (p *ProgressTracker) render() {
 				errMsg = errMsg[:60] + "..."
 			}
 			styledStep = p.failStyle.Render("Failed: " + errMsg)
-		case StepPending:
+		} else if isPending {
 			styledStep = p.pendingStyle.Render("Waiting")
-		default:
+		} else {
 			styledStep = p.stepStyle.Render(j.Step)
 		}
 
 		// Build the status icon
 		var icon string
-		switch j.Step {
-		case StepDone:
+		if isDone {
 			icon = p.doneStyle.Render("✓")
-		case StepFailed:
+		} else if isFailed {
 			icon = p.failStyle.Render("✗")
-		case StepPending:
+		} else if isPending {
 			icon = p.pendingStyle.Render("○")
-		default:
+		} else {
 			icon = p.stepStyle.Render("●")
 		}
 

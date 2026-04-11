@@ -12,9 +12,9 @@ type helperConfig struct {
 	OutputDir  string `json:"output_dir"`
 }
 
-// WriteHelperConfig writes a JSON config file to the host Mac's caches
-// directory. The SnapshotHelper.swift reads this at test runtime using
-// the SIMULATOR_HOST_HOME environment variable (same approach as fastlane).
+// WriteHelperConfig writes a per-device JSON config file to the host Mac's
+// caches directory. Each simulator gets its own config file keyed by UDID
+// so parallel runs don't overwrite each other.
 func WriteHelperConfig(udid, deviceName, outputDir string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -22,7 +22,7 @@ func WriteHelperConfig(udid, deviceName, outputDir string) error {
 	}
 
 	cachesDir := filepath.Join(home, "Library", "Caches", "tools.delivr")
-	return writeConfig(cachesDir, deviceName, outputDir)
+	return writeConfig(cachesDir, udid, deviceName, outputDir)
 }
 
 // WriteHelperConfigMacOS writes the config to the host Mac's caches directory.
@@ -33,10 +33,10 @@ func WriteHelperConfigMacOS(deviceName, outputDir string) error {
 	}
 
 	cachesDir := filepath.Join(home, "Library", "Caches", "tools.delivr")
-	return writeConfig(cachesDir, deviceName, outputDir)
+	return writeConfig(cachesDir, "macos", deviceName, outputDir)
 }
 
-func writeConfig(cachesDir, deviceName, outputDir string) error {
+func writeConfig(cachesDir, udid, deviceName, outputDir string) error {
 	if err := os.MkdirAll(cachesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create caches dir: %w", err)
 	}
@@ -56,6 +56,6 @@ func writeConfig(cachesDir, deviceName, outputDir string) error {
 		return fmt.Errorf("failed to marshal helper config: %w", err)
 	}
 
-	configPath := filepath.Join(cachesDir, "snapshot-config.json")
+	configPath := filepath.Join(cachesDir, "snapshot-config-"+udid+".json")
 	return os.WriteFile(configPath, data, 0644)
 }

@@ -113,22 +113,27 @@ open class Snapshot: NSObject {
     class func loadConfig() -> DelivrConfig? {
         let cachePath = "Library/Caches/tools.delivr"
 
+        // Determine UDID for per-device config lookup
+        let udid: String
         #if os(macOS)
+            udid = "macos"
             let homeDir = URL(fileURLWithPath: NSHomeDirectory())
-            let configURL = homeDir
-                .appendingPathComponent(cachePath)
-                .appendingPathComponent("snapshot-config.json")
         #else
-            // On iOS simulator, use SIMULATOR_HOST_HOME to find the host Mac's home
+            guard let simUDID = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] else {
+                NSLog("delivr: SIMULATOR_UDID not set — running on physical device?")
+                return nil
+            }
+            udid = simUDID
             guard let simulatorHostHome = ProcessInfo.processInfo.environment["SIMULATOR_HOST_HOME"] else {
-                NSLog("delivr: SIMULATOR_HOST_HOME not set — running on physical device?")
+                NSLog("delivr: SIMULATOR_HOST_HOME not set")
                 return nil
             }
             let homeDir = URL(fileURLWithPath: simulatorHostHome)
-            let configURL = homeDir
-                .appendingPathComponent(cachePath)
-                .appendingPathComponent("snapshot-config.json")
         #endif
+
+        let configURL = homeDir
+            .appendingPathComponent(cachePath)
+            .appendingPathComponent("snapshot-config-\(udid).json")
 
         guard let data = try? Data(contentsOf: configURL) else {
             NSLog("delivr: Config not found at \(configURL.path)")
