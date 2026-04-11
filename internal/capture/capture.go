@@ -1,0 +1,313 @@
+package capture
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Job represents a single capture job (one device + one appearance).
+type Job struct {
+	Device     DeviceConfig
+	Appearance string
+	UDID       string // empty for macOS
+	Runtime    string // e.g. "iOS 26.4"
+}
+
+// RunCapture orchestrates the full screenshot capture pipeline.
+func RunCapture(cfg *Config, verbose bool) error {
+	// Build jobs: device × appearance
+	var jobs []Job
+	for _, device := range cfg.Devices {
+		for _, appearance := range cfg.Appearances {
+			job := Job{
+				Device:     device,
+				Appearance: appearance,
+			}
+
+			// Look up simulator UDID for iOS devices
+			if device.Platform != "macos" {
+				result, err := FindDevice(device.Name)
+				if err != nil {
+					return fmt.Errorf("device %q: %w", device.Name, err)
+				}
+				job.UDID = result.UDID
+				job.Runtime = result.Runtime
+			}
+
+			jobs = append(jobs, job)
+		}
+	}
+
+	total := len(jobs)
+	headerStyle := lipgloss.NewStyle().Bold(true)
+	fmt.Println(headerStyle.Render(fmt.Sprintf(
+		"Capturing screenshots: %d jobs (%d devices × %d appearances)",
+		total, len(cfg.Devices), len(cfg.Appearances),
+	)))
+	fmt.Println()
+
+	// Build once upfront so parallel test runs don't fight over the build DB
+	buildStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	fmt.Println(buildStyle.Render("Building for testing..."))
+	if err := BuildForTesting(cfg.Project, cfg.Scheme, cfg.Devices, verbose); err != nil {
+		return err
+	}
+	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	fmt.Println(doneStyle.Render("Build complete."))
+	fmt.Println()
+
+	tracker := NewProgressTracker(jobs)
+
+	if cfg.Parallel {
+		return runParallel(cfg, jobs, tracker, verbose)
+	}
+	return runSequential(cfg, jobs, tracker, verbose)
+}
+
+func runParallel(cfg *Config, jobs []Job, tracker *ProgressTracker, verbose bool) error {
+	// Group jobs by device — each device runs appearances sequentially,
+	// but different devices run in parallel. A simulator can only be
+	// booted once, so we can't run dark+light on the same device simultaneously.
+	type deviceGroup struct {
+		indices []int
+		jobs    []Job
+	}
+	groups := make(map[string]*deviceGroup)
+	var groupOrder []string
+
+	for i, j := range jobs {
+		key := j.Device.Name + "|" + j.Device.Platform
+		if groups[key] == nil {
+			groups[key] = &deviceGroup{}
+			groupOrder = append(groupOrder, key)
+		}
+		groups[key].indices = append(groups[key].indices, i)
+		groups[key].jobs = append(groups[key].jobs, j)
+	}
+
+	// Initial render
+	tracker.Update(0, StepPending)
+
+	var wg sync.WaitGroup
+	var firstErr error
+	var errOnce sync.Once
+
+	for _, key := range groupOrder {
+		g := groups[key]
+		wg.Add(1)
+		go func(grp *deviceGroup) {
+			defer wg.Done()
+
+			// Run appearances sequentially for this device
+			for i, j := range grp.jobs {
+				idx := grp.indices[i]
+				if err := runJobWithProgress(cfg, j, idx, tracker, verbose); err != nil {
+					tracker.Fail(idx, err)
+					errOnce.Do(func() {
+						firstErr = fmt.Errorf("%s/%s: %w", j.Device.Name, j.Appearance, err)
+					})
+					return // stop this device on first error
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+	tracker.Finalize()
+	fmt.Println()
+
+	if firstErr != nil {
+		// Print the full error details below the progress table
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		fmt.Println(errStyle.Render("Error: " + firstErr.Error()))
+		return fmt.Errorf("capture failed")
+	}
+
+	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	fmt.Println(doneStyle.Render(fmt.Sprintf("Screenshots saved to %s", cfg.Output)))
+	return nil
+}
+
+func runSequential(cfg *Config, jobs []Job, tracker *ProgressTracker, verbose bool) error {
+	// Initial render
+	tracker.Update(0, StepPending)
+
+	for i, job := range jobs {
+		if err := runJobWithProgress(cfg, job, i, tracker, verbose); err != nil {
+			tracker.Fail(i, err)
+			tracker.Finalize()
+			fmt.Println()
+			errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+			fmt.Println(errStyle.Render("Error: " + err.Error()))
+			return fmt.Errorf("capture failed")
+		}
+	}
+
+	tracker.Finalize()
+	fmt.Println()
+
+	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	fmt.Println(doneStyle.Render(fmt.Sprintf("Screenshots saved to %s", cfg.Output)))
+	return nil
+}
+
+func runJobWithProgress(cfg *Config, job Job, index int, tracker *ProgressTracker, verbose bool) error {
+	// Create a temporary output directory for the SnapshotHelper
+	helperDir, err := os.MkdirTemp("", "delivr-capture-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(helperDir)
+
+	if job.Device.Platform == "macos" {
+		return runMacOSJobWithProgress(cfg, job, index, helperDir, tracker, verbose)
+	}
+	return runIOSJobWithProgress(cfg, job, index, helperDir, tracker, verbose)
+}
+
+func runIOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, tracker *ProgressTracker, verbose bool) error {
+	// Boot simulator
+	tracker.Update(index, StepBooting)
+	if err := BootDevice(job.UDID); err != nil {
+		return fmt.Errorf("failed to boot: %w", err)
+	}
+	if err := WaitForBoot(job.UDID); err != nil {
+		return fmt.Errorf("failed to wait for boot: %w", err)
+	}
+
+	// Set status bar
+	tracker.Update(index, StepStatusBar)
+	if err := SetStatusBar(job.UDID, cfg.StatusBar); err != nil {
+		return fmt.Errorf("failed to set status bar: %w", err)
+	}
+
+	// Set appearance
+	tracker.Update(index, StepAppearance)
+	if err := SetAppearance(job.UDID, job.Appearance); err != nil {
+		return fmt.Errorf("failed to set appearance: %w", err)
+	}
+
+	// Write SnapshotHelper config
+	tracker.Update(index, StepWritingConfig)
+	if err := WriteHelperConfig(job.UDID, job.Device.Name, helperDir); err != nil {
+		return fmt.Errorf("failed to write helper config: %w", err)
+	}
+
+	// Run tests with screenshot count polling
+	tracker.Update(index, StepRunningTests+" (0 screenshots)")
+	stopPolling := pollScreenshots(helperDir, index, tracker)
+	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "ios", job.UDID, verbose)
+	stopPolling()
+
+	if testErr != nil {
+		return testErr
+	}
+
+	// Collect screenshots
+	count, err := CollectScreenshots(helperDir, cfg.Output, job.Appearance, verbose)
+	if err != nil {
+		return fmt.Errorf("failed to collect screenshots: %w", err)
+	}
+
+	tracker.Update(index, fmt.Sprintf("Done (%d screenshots)", count))
+	return nil
+}
+
+func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, tracker *ProgressTracker, verbose bool) error {
+	// Write SnapshotHelper config for macOS
+	tracker.Update(index, StepWritingConfig)
+	if err := WriteHelperConfigMacOS(job.Device.Name, helperDir); err != nil {
+		return fmt.Errorf("failed to write helper config: %w", err)
+	}
+
+	// Set macOS appearance
+	tracker.Update(index, StepMacOSAppearance)
+	var appearanceValue string
+	if job.Appearance == "dark" {
+		appearanceValue = "true"
+	} else {
+		appearanceValue = "false"
+	}
+	setAppearanceScript := fmt.Sprintf(
+		`tell application "System Events" to tell appearance preferences to set dark mode to %s`,
+		appearanceValue,
+	)
+	if err := runOsascript(setAppearanceScript); err != nil {
+		return fmt.Errorf("failed to set macOS appearance: %w", err)
+	}
+
+	// Run tests with screenshot count polling
+	tracker.Update(index, StepRunningTests+" (0 screenshots)")
+	stopPolling := pollScreenshots(helperDir, index, tracker)
+	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "macos", "", verbose)
+	stopPolling()
+
+	if testErr != nil {
+		return testErr
+	}
+
+	// Collect screenshots
+	count, err := CollectScreenshots(helperDir, cfg.Output, job.Appearance, verbose)
+	if err != nil {
+		return fmt.Errorf("failed to collect screenshots: %w", err)
+	}
+
+	tracker.Update(index, fmt.Sprintf("Done (%d screenshots)", count))
+	return nil
+}
+
+func runOsascript(script string) error {
+	return exec.Command("osascript", "-e", script).Run()
+}
+
+// pollScreenshots polls a directory for .png files and updates the tracker
+// with the current count. Returns a stop function.
+func pollScreenshots(dir string, index int, tracker *ProgressTracker) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		lastCount := 0
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				count := countPNGs(dir)
+				if count != lastCount {
+					lastCount = count
+					tracker.Update(index, fmt.Sprintf("%s (%d screenshots)", StepRunningTests, count))
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
+func countPNGs(dir string) int {
+	count := 0
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		// Also check subdirectories
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".png") {
+				count++
+			}
+			return nil
+		})
+		return count
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".png") {
+			count++
+		}
+	}
+	return count
+}

@@ -1,0 +1,161 @@
+package capture
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+// BuildForTesting runs `xcodebuild build-for-testing` once so that parallel
+// test runs can use `test-without-building` without locking the build DB.
+func BuildForTesting(project, scheme string, devices []DeviceConfig, verbose bool) error {
+	// Build for all destinations
+	args := []string{
+		"build-for-testing",
+		"-project", project,
+		"-scheme", scheme,
+	}
+
+	// Add all destinations so Xcode builds for all required platforms
+	for _, device := range devices {
+		if device.Platform == "macos" {
+			args = append(args, "-destination", "platform=macOS")
+		} else {
+			result, err := FindDevice(device.Name)
+			if err != nil {
+				continue
+			}
+			args = append(args, "-destination", fmt.Sprintf("platform=iOS Simulator,id=%s", result.UDID))
+		}
+	}
+
+	cmd := exec.Command("xcodebuild", args...)
+
+	var stderr bytes.Buffer
+	if verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stderr = &stderr
+	}
+
+	if err := cmd.Run(); err != nil {
+		errMsg := stderr.String()
+		if errMsg != "" {
+			lines := strings.Split(strings.TrimSpace(errMsg), "\n")
+			if len(lines) > 10 {
+				lines = lines[len(lines)-10:]
+			}
+			return fmt.Errorf("build-for-testing failed: %w\n%s", err, strings.Join(lines, "\n"))
+		}
+		return fmt.Errorf("build-for-testing failed: %w", err)
+	}
+
+	return nil
+}
+
+// RunTests executes xcodebuild test-without-building for a specific device.
+func RunTests(project, scheme, testTarget, deviceName, platform, udid string, verbose bool) error {
+	var destination string
+	if platform == "macos" {
+		destination = "platform=macOS"
+	} else {
+		destination = fmt.Sprintf("platform=iOS Simulator,id=%s", udid)
+	}
+
+	args := []string{
+		"test-without-building",
+		"-project", project,
+		"-scheme", scheme,
+		"-destination", destination,
+	}
+
+	if testTarget != "" {
+		args = append(args, "-only-testing:"+testTarget)
+	}
+
+	cmd := exec.Command("xcodebuild", args...)
+
+	var combined bytes.Buffer
+	if verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+	}
+
+	if err := cmd.Run(); err != nil {
+		output := combined.String()
+		if output != "" {
+			// Extract the most useful lines — filter out noise
+			var relevant []string
+			for _, line := range strings.Split(output, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					continue
+				}
+				// Skip xcodebuild timestamp noise
+				if strings.Contains(trimmed, "[MT] IDELaunchParametersSnapshot") {
+					continue
+				}
+				if strings.Contains(trimmed, "[MT] IDETestOperationsObserverDebug") {
+					continue
+				}
+				relevant = append(relevant, trimmed)
+			}
+			// Show last 15 relevant lines
+			if len(relevant) > 15 {
+				relevant = relevant[len(relevant)-15:]
+			}
+			if len(relevant) > 0 {
+				return fmt.Errorf("xcodebuild test failed: %w\n%s", err, strings.Join(relevant, "\n"))
+			}
+		}
+		return fmt.Errorf("xcodebuild test failed: %w", err)
+	}
+
+	return nil
+}
+
+// CollectScreenshots moves screenshots from the helper output directory to the
+// final destination organized by appearance.
+func CollectScreenshots(helperOutputDir, finalDir, appearance string, verbose bool) (int, error) {
+	appearanceDir := filepath.Join(finalDir, appearance)
+	if err := os.MkdirAll(appearanceDir, 0755); err != nil {
+		return 0, fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	count := 0
+	entries, err := os.ReadDir(helperOutputDir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read helper output: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".png") {
+			continue
+		}
+
+		src := filepath.Join(helperOutputDir, entry.Name())
+		dst := filepath.Join(appearanceDir, entry.Name())
+
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return count, fmt.Errorf("failed to read %s: %w", entry.Name(), err)
+		}
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			return count, fmt.Errorf("failed to write %s: %w", entry.Name(), err)
+		}
+
+		if verbose {
+			fmt.Printf("    %s\n", entry.Name())
+		}
+		count++
+	}
+
+	return count, nil
+}

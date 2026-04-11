@@ -1,0 +1,27 @@
+project: ../../mqtt-analyzer/src/MQTTAnalyzer.xcodeproj
+scheme: MQTTAnalyzer
+test_target: MQTTAnalyzerUITests/ScreenshotTests
+output: ./screenshots
+
+devices:
+  - name: "iPhone 17 Pro Max"
+    platform: ios
+  - name: "iPhone 17 Pro"
+    platform: ios
+  - name: "iPad Air 11-inch (M3)"
+    platform: ios
+#  - name: "My Mac"
+#    platform: macos
+
+appearances:
+  - dark
+  - light
+
+status_bar:
+  time: "9:41"
+  wifi_bars: 3
+  cellular_bars: 4
+  battery_level: 100
+  battery_state: charged
+
+parallel: true

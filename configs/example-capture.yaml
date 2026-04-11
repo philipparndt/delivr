@@ -1,0 +1,47 @@
+# Example capture configuration for delivr
+#
+# This config drives `delivr capture` to run UI tests on simulators
+# and collect screenshots. It replaces fastlane's snapshot functionality.
+#
+# Usage:
+#   delivr capture --config configs/example-capture.yaml
+
+# Xcode project and scheme
+project: ../src/MQTTAnalyzer.xcodeproj
+scheme: MQTTAnalyzer
+
+# UI test target/class to run (only-testing filter)
+test_target: MQTTAnalyzerUITests/ScreenshotTests
+
+# Output directory for captured screenshots
+output: ./screenshots
+
+# Devices to capture on
+devices:
+  # iOS simulators
+  - name: "iPhone 17 Pro Max"
+    platform: ios
+  - name: "iPhone 17 Pro"
+    platform: ios
+  - name: "iPad Air 11-inch (M3)"
+    platform: ios
+
+  # macOS (runs on host Mac directly)
+  # - name: "My Mac"
+  #   platform: macos
+
+# Capture both dark and light mode
+appearances:
+  - dark
+  - light
+
+# Status bar override (iOS simulators only)
+status_bar:
+  time: "9:41"
+  wifi_bars: 3
+  cellular_bars: 4
+  battery_level: 100
+  battery_state: charged
+
+# Run all device × appearance combinations in parallel
+parallel: true

@@ -35,7 +35,23 @@ make build
 
 ## Usage
 
-### Generate Screenshots
+### Capture Screenshots from Simulators
+
+Run UI tests on iOS simulators (and macOS) to capture screenshots with
+status bar override, dark/light mode, and parallel execution:
+
+```bash
+delivr capture --config capture.yaml
+```
+
+See `configs/example-capture.yaml` for a full config example. Replace
+fastlane's `SnapshotHelper.swift` with the one in `snapshot/` — same
+`snapshot("name")` API, no fastlane dependency.
+
+### Generate App Store Screenshots
+
+Compose captured screenshots into final App Store images with device
+frames, backgrounds, and text:
 
 ```bash
 delivr generate --config config.yaml --output ./output --verbose

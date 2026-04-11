@@ -17,6 +17,9 @@ var helpFrames string
 //go:embed help/frames-download.md
 var helpFramesDownload string
 
+//go:embed help/capture.md
+var helpCapture string
+
 //go:embed help/deliver.md
 var helpDeliver string
 
@@ -38,6 +41,8 @@ func GetHelp(topic string) string {
 		return renderMarkdown(helpFrames)
 	case "frames-download":
 		return renderMarkdown(helpFramesDownload)
+	case "capture":
+		return renderMarkdown(helpCapture)
 	case "deliver":
 		return renderMarkdown(helpDeliver)
 	case "version":
