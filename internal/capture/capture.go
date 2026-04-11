@@ -159,16 +159,29 @@ func runSequential(cfg *Config, jobs []Job, tracker *ProgressTracker, verbose bo
 }
 
 func runJobWithProgress(cfg *Config, job Job, index int, tracker *ProgressTracker, verbose bool) error {
-	// Create a temporary output directory for the SnapshotHelper
-	helperDir, err := os.MkdirTemp("", "delivr-capture-*")
+	var helperDir string
+	var err error
+
+	if job.Device.Platform == "macos" {
+		// macOS apps run sandboxed — the SnapshotHelper writes screenshots
+		// into its sandbox container's caches dir. We pass a placeholder
+		// helperDir for config writing; after tests, we scan ~/Library/Containers/
+		// to find the actual screenshots.
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return fmt.Errorf("failed to get home dir: %w", homeErr)
+		}
+		helperDir = filepath.Join(home, "Library", "Caches", "tools.delivr", "output-macos-placeholder")
+		os.MkdirAll(helperDir, 0755)
+		return runMacOSJobWithProgress(cfg, job, index, helperDir, tracker, verbose)
+	}
+
+	// iOS: use a regular temp dir (simulators can access the host filesystem)
+	helperDir, err = os.MkdirTemp("", "delivr-capture-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(helperDir)
-
-	if job.Device.Platform == "macos" {
-		return runMacOSJobWithProgress(cfg, job, index, helperDir, tracker, verbose)
-	}
 	return runIOSJobWithProgress(cfg, job, index, helperDir, tracker, verbose)
 }
 
@@ -245,9 +258,20 @@ func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, 
 		_ = setMacOSDarkMode(originalDarkMode)
 	}()
 
-	// Run tests with screenshot count polling
+	// Run tests with screenshot count polling.
+	// Poll the sandbox container path where screencapture writes.
 	tracker.Update(index, StepRunningTests+" (0 screenshots)")
-	stopPolling := pollScreenshots(helperDir, index, tracker)
+	home, _ := os.UserHomeDir()
+	containerScreenshotsDir := findMacOSContainerScreenshotsDir(home)
+	if containerScreenshotsDir != "" {
+		// Clear any stale screenshots from previous run
+		os.RemoveAll(containerScreenshotsDir)
+	}
+	pollDir := helperDir
+	if containerScreenshotsDir != "" {
+		pollDir = containerScreenshotsDir
+	}
+	stopPolling := pollScreenshots(pollDir, index, tracker)
 	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "macos", "", verbose)
 	stopPolling()
 
@@ -255,14 +279,37 @@ func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, 
 		return testErr
 	}
 
+	// On macOS, find screenshots in the sandbox container.
+	actualDir := helperDir
+	if found := findMacOSContainerScreenshotsDir(home); found != "" && countPNGs(found) > 0 {
+		actualDir = found
+	}
+	defer os.RemoveAll(actualDir)
+
 	// Collect screenshots
-	count, err := CollectScreenshots(helperDir, cfg.Output, job.Appearance, verbose)
+	count, err := CollectScreenshots(actualDir, cfg.Output, job.Appearance, verbose)
 	if err != nil {
 		return fmt.Errorf("failed to collect screenshots: %w", err)
 	}
 
 	tracker.Update(index, fmt.Sprintf("Done (%d screenshots)", count))
 	return nil
+}
+
+// findMacOSContainerScreenshotsDir finds the sandbox container's screenshots dir.
+func findMacOSContainerScreenshotsDir(home string) string {
+	containersDir := filepath.Join(home, "Library", "Containers")
+	entries, err := os.ReadDir(containersDir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		candidate := filepath.Join(containersDir, e.Name(), "Data", "Library", "Caches", "tools.delivr", "screenshots")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func runOsascript(script string) error {
