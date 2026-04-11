@@ -137,9 +137,6 @@ func mergeDeviceImage(base, override *DeviceImage) *DeviceImage {
 	}
 
 	result := *base
-	if override.Mode != "" {
-		result.Mode = override.Mode
-	}
 	if override.Source != "" {
 		result.Source = override.Source
 	}
@@ -155,14 +152,8 @@ func mergeDeviceImage(base, override *DeviceImage) *DeviceImage {
 	if override.Y != 0 {
 		result.Y = override.Y
 	}
-	if override.RoratoFile != "" {
-		result.RoratoFile = override.RoratoFile
-	}
 	if override.Template != "" {
 		result.Template = override.Template
-	}
-	if len(override.TemplateRect) > 0 {
-		result.TemplateRect = override.TemplateRect
 	}
 	// AutoCrop: override wins if true (can't "unset" from template)
 	if override.AutoCrop {
@@ -297,29 +288,8 @@ func validateBackground(bg *Background) error {
 }
 
 func validateDeviceImage(di *DeviceImage) error {
-	switch di.Mode {
-	case "image":
-		if di.Source == "" {
-			return fmt.Errorf("image mode requires source")
-		}
-	case "rotato-cli":
-		if di.Source == "" || di.RoratoFile == "" {
-			return fmt.Errorf("rotato-cli mode requires source and rotato_file")
-		}
-	case "rotato-template":
-		if di.Source == "" || di.Template == "" {
-			return fmt.Errorf("rotato-template mode requires source and template")
-		}
-		if len(di.TemplateRect) != 4 {
-			return fmt.Errorf("rotato-template mode requires template_rect with 4 values")
-		}
-	case "rotato-image":
-		// Pre-rendered Rotato image - just needs source
-		if di.Source == "" {
-			return fmt.Errorf("rotato-image mode requires source")
-		}
-	default:
-		return fmt.Errorf("unknown device mode: %s", di.Mode)
+	if di.Source == "" {
+		return fmt.Errorf("device requires source")
 	}
 	return nil
 }

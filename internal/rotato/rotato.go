@@ -255,47 +255,6 @@ func RenderWithFrame(frame, mask *image.NRGBA, meta *FrameMetadata, screenshotPa
 	return finalImg, nil
 }
 
-// RenderWithTemplate composites a screenshot into a pre-exported Rotato frame
-func RenderWithTemplate(templatePath, screenshotPath string, rect []int, targetWidth, targetHeight int) (image.Image, error) {
-	if len(rect) != 4 {
-		return nil, fmt.Errorf("template_rect must have 4 values [x, y, w, h]")
-	}
-
-	// Load template (frame with transparent screen area)
-	template, err := imaging.Open(templatePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load template: %w", err)
-	}
-
-	// Load screenshot
-	screenshot, err := imaging.Open(screenshotPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load screenshot: %w", err)
-	}
-
-	// Scale screenshot to fit the template rect
-	rectX, rectY, rectW, rectH := rect[0], rect[1], rect[2], rect[3]
-	scaledScreenshot := imaging.Resize(screenshot, rectW, rectH, imaging.Lanczos)
-
-	// Create output image
-	bounds := template.Bounds()
-	result := image.NewRGBA(bounds)
-
-	// Draw screenshot first (behind)
-	draw.Draw(result, image.Rect(rectX, rectY, rectX+rectW, rectY+rectH), scaledScreenshot, image.Point{}, draw.Src)
-
-	// Draw template on top (frame overlays screenshot)
-	draw.Draw(result, bounds, template, bounds.Min, draw.Over)
-
-	// Scale final result if needed
-	var finalImg image.Image = result
-	if targetWidth > 0 || targetHeight > 0 {
-		finalImg = scaleImage(result, targetWidth, targetHeight)
-	}
-
-	return finalImg, nil
-}
-
 // DetectContentBounds finds the bounding box of non-transparent pixels in an image.
 // alphaThreshold is the minimum alpha value (0-255) to consider as content.
 // Use ~10-20 to include soft shadow edges, higher values for tighter cropping.

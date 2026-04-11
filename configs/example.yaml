@@ -40,10 +40,7 @@ templates:
       align: "center"
       y: 280
     device:
-      mode: "image"
-      width: 0
       height: 2200
-      x: 0
       y: 450
 
   ipad:
@@ -60,10 +57,7 @@ templates:
       align: "center"
       y: 320
     device:
-      mode: "image"
-      width: 0
       height: 2100
-      x: 0
       y: 500
 
 screens:

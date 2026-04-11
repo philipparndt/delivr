@@ -1,35 +1,37 @@
-Batch process screenshot images through a Rotato 3D scene,
-exporting each as a 3D mockup.
+Generate device template sets from Rotato `.rotato` files.
 
-Use this to prepare 3D device images before composing final
-App Store screenshots.
+Each `.rotato` file is rendered with a magenta placeholder through the
+Rotato macOS app. The output is analyzed to detect the device screen
+region and saved as a template set: frame PNG, mask PNG, and metadata JSON.
+
+These template sets are then used by `delivr generate` to composite
+screenshots into 3D device mockups.
 
 ## Usage
 
 ```bash
-delivr rotato --template <file.rotato> --images <dir|files> --output <dir> [--frames <dir>]
+delivr rotato --input <dir-with-rotato-files> --output <templates-dir> [--dim WxH]
 ```
 
 ## Workflow
 
-1. Create your 3D scene in Rotato and save as `.rotato` file
-2. Run this command to batch-process all screenshots through that scene
-3. Use the output 3D images in your delivr config (`mode: image`)
+1. Place your `.rotato` scene files in a directory
+2. Run `delivr rotato` to generate template sets
+3. Reference the `.frame.json` files in your screenshot config
+4. Run `delivr generate` to produce final screenshots
 
-## Fast Path
+## Caching
 
-If you have pre-rendered frames (from `delivr rotato frame`), pass `--frames`
-to skip Rotato UI automation entirely and composite in-process.
+Raw Rotato renders are cached as `.raw.png` files. Re-running the
+command skips the slow UI automation and only re-runs frame detection.
+Delete the `.raw.png` files to force re-rendering.
 
 ## Examples
 
 ```bash
-# Process all PNGs in a directory
-delivr rotato --template scene.rotato --images ./screenshots --output ./3d
+# Generate templates for all .rotato files
+delivr rotato --input ./rotato-files --output ./frames
 
-# Process specific files
-delivr rotato --template scene.rotato --images "screen1.png,screen2.png" --output ./3d
-
-# Use pre-rendered frames (fast)
-delivr rotato --template scene.rotato --images ./screenshots --output ./3d --frames ./frames
+# Use custom placeholder dimensions (e.g., for iPad)
+delivr rotato --input ./rotato-files --output ./frames --dim 2064x2752
 ```

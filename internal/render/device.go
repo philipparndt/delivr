@@ -21,38 +21,23 @@ func RenderDevice(dc *gg.Context, deviceCfg *config.DeviceImage, screenshotsDir,
 	var img image.Image
 	var err error
 
-	switch deviceCfg.Mode {
-	case "image":
+	if deviceCfg.Template != "" {
+		// Template mode: load frame JSON and composite screenshot
+		templatePath := screenshotsDir + "/" + deviceCfg.Template
+		frame, mask, meta, loadErr := rotato.LoadFrame(templatePath)
+		if loadErr != nil {
+			return fmt.Errorf("failed to load device template %s: %w", templatePath, loadErr)
+		}
+		img, err = rotato.RenderWithFrame(frame, mask, meta, fullPath, deviceCfg.Width, deviceCfg.Height)
+		if err != nil {
+			return fmt.Errorf("failed to render with device template: %w", err)
+		}
+	} else {
+		// Flat mode: load screenshot directly
 		img, err = loadAndScaleImage(fullPath, deviceCfg.Width, deviceCfg.Height)
 		if err != nil {
 			return fmt.Errorf("failed to load device image: %w", err)
 		}
-
-	case "rotato-cli":
-		// Use Rotato CLI to render 3D mockup
-		rotatoPath := screenshotsDir + "/" + deviceCfg.RoratoFile
-		img, err = rotato.RenderWithCLI(rotatoPath, fullPath, deviceCfg.Width, deviceCfg.Height, false)
-		if err != nil {
-			return fmt.Errorf("failed to render with Rotato CLI: %w", err)
-		}
-
-	case "rotato-template":
-		// Composite into pre-exported Rotato frame
-		templatePath := screenshotsDir + "/" + deviceCfg.Template
-		img, err = rotato.RenderWithTemplate(templatePath, fullPath, deviceCfg.TemplateRect, deviceCfg.Width, deviceCfg.Height)
-		if err != nil {
-			return fmt.Errorf("failed to render with Rotato template: %w", err)
-		}
-
-	case "rotato-image":
-		// Load pre-rendered Rotato image (already exported from Rotato app)
-		img, err = loadAndScaleImage(fullPath, 0, 0) // Load without scaling first
-		if err != nil {
-			return fmt.Errorf("failed to load Rotato image: %w", err)
-		}
-
-	default:
-		return fmt.Errorf("unknown device mode: %s", deviceCfg.Mode)
 	}
 
 	// Auto-crop to content bounds if enabled

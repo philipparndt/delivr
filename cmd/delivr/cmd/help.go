@@ -11,9 +11,6 @@ var helpGenerate string
 //go:embed help/rotato.md
 var helpRotato string
 
-//go:embed help/rotato-frame.md
-var helpRotatoFrame string
-
 //go:embed help/deliver.md
 var helpDeliver string
 
@@ -31,8 +28,6 @@ func GetHelp(topic string) string {
 		return renderMarkdown(helpGenerate)
 	case "rotato":
 		return renderMarkdown(helpRotato)
-	case "rotato-frame":
-		return renderMarkdown(helpRotatoFrame)
 	case "deliver":
 		return renderMarkdown(helpDeliver)
 	case "version":

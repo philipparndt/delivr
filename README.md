@@ -44,16 +44,16 @@ delivr generate --config config.yaml --output ./output --verbose
 delivr --config config.yaml
 ```
 
-### Rotato 3D Batch Processing
+### Generate Device Templates from Rotato
+
+Generate device template sets (frame + mask + metadata) from `.rotato` files.
+This is a one-time setup step — templates are then referenced in your screenshot config.
 
 ```bash
-delivr rotato --template scene.rotato --images ./screenshots --output ./3d-output
-```
+delivr rotato --input ./rotato-files --output ./frames
 
-### Pre-render Rotato Frame (fast path)
-
-```bash
-delivr rotato frame --template iphone_front.rotato --output frames --dim 1320x2868
+# Custom placeholder dimensions (e.g., for iPad)
+delivr rotato --input ./rotato-files --output ./frames --dim 2064x2752
 ```
 
 ### Deliver to App Store Connect
@@ -92,7 +92,7 @@ delivr version
 Screenshots are defined in YAML config files. See `configs/` for examples:
 
 - `configs/example.yaml` — Basic flat screenshots
-- `configs/example-rotato.yaml` — Rotato 3D mockup integration
+- `configs/example-rotato.yaml` — Device templates with 3D Rotato mockups
 
 ## License
 

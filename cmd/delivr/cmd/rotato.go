@@ -12,144 +12,153 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rotatoTemplateFile string
-var rotatoImagesInput string
+var rotatoInputDir string
 var rotatoOutputDir string
-var rotatoFramesDir string
+var rotatoDim string
 
 var rotatoCmd = &cobra.Command{
 	Use:   "rotato",
-	Short: "Batch process images through Rotato 3D",
+	Short: "Generate device templates from .rotato files",
 	Long:  GetHelp("rotato"),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if rotatoTemplateFile == "" || rotatoImagesInput == "" || rotatoOutputDir == "" {
-			return fmt.Errorf("--template, --images, and --output are required")
+		if rotatoInputDir == "" || rotatoOutputDir == "" {
+			return fmt.Errorf("--input and --output are required")
 		}
-		return runRotatoBatch(rotatoTemplateFile, rotatoImagesInput, rotatoOutputDir, rotatoFramesDir, verbose)
+
+		w, h, err := parseDim(rotatoDim)
+		if err != nil {
+			return fmt.Errorf("invalid --dim: %w", err)
+		}
+
+		return runRotatoGenerate(rotatoInputDir, rotatoOutputDir, w, h, verbose)
 	},
 }
 
 func init() {
-	rotatoCmd.Flags().StringVar(&rotatoTemplateFile, "template", "", "Path to .rotato template file (required)")
-	rotatoCmd.Flags().StringVar(&rotatoImagesInput, "images", "", "Directory or comma-separated list of image files (required)")
-	rotatoCmd.Flags().StringVar(&rotatoOutputDir, "output", "", "Output directory for 3D rendered images (required)")
-	rotatoCmd.Flags().StringVar(&rotatoFramesDir, "frames", "", "Directory containing pre-rendered frame PNG+JSON (optional; enables fast path)")
+	rotatoCmd.Flags().StringVar(&rotatoInputDir, "input", "", "Directory containing .rotato files (required)")
+	rotatoCmd.Flags().StringVar(&rotatoOutputDir, "output", "", "Output directory for device template sets (required)")
+	rotatoCmd.Flags().StringVar(&rotatoDim, "dim", "1320x2868", "Placeholder dimensions as WxH")
 	rootCmd.AddCommand(rotatoCmd)
 }
 
-func runRotatoBatch(templateFile, imagesInput, outputDir, framesDir string, verbose bool) error {
+func parseDim(s string) (int, int, error) {
+	parts := strings.Split(s, "x")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("expected format WxH, got %q", s)
+	}
+	var w, h int
+	if _, err := fmt.Sscanf(parts[0], "%d", &w); err != nil || w <= 0 {
+		return 0, 0, fmt.Errorf("invalid width %q", parts[0])
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &h); err != nil || h <= 0 {
+		return 0, 0, fmt.Errorf("invalid height %q", parts[1])
+	}
+	return w, h, nil
+}
+
+func loadRawIfExists(path string) (image.Image, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return imaging.Open(path)
+}
+
+func saveRawPNG(path string, img image.Image) error {
+	return imaging.Save(img, path)
+}
+
+func runRotatoGenerate(inputDir, outputDir string, w, h int, verbose bool) error {
+	// Find all .rotato files in input directory
+	rotatoFiles, err := rotato.FindRotatoFiles(inputDir)
+	if err != nil {
+		return fmt.Errorf("failed to scan input directory: %w", err)
+	}
+
+	if len(rotatoFiles) == 0 {
+		return fmt.Errorf("no .rotato files found in %s", inputDir)
+	}
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	var frameImage *image.NRGBA
-	var frameMask *image.NRGBA
-	var frameMeta *rotato.FrameMetadata
-	if framesDir != "" {
-		jsonPath := rotato.FrameJSONForTemplate(templateFile, framesDir)
-		if _, err := os.Stat(jsonPath); err == nil {
-			img, mask, meta, loadErr := rotato.LoadFrame(jsonPath)
-			if loadErr != nil {
-				return fmt.Errorf("failed to load frame %s: %w", jsonPath, loadErr)
-			}
-			frameImage = img
-			frameMask = mask
-			frameMeta = meta
-			if verbose {
-				fmt.Printf("Using pre-rendered frame: %s\n", jsonPath)
-				if meta.IsRectangle {
-					fmt.Printf("  Mode: rectangle blit\n")
-				} else {
-					fmt.Printf("  Mode: perspective warp\n")
-				}
-			}
-		} else if verbose {
-			fmt.Printf("No frame found at %s, falling back to Rotato UI automation\n", jsonPath)
-		}
-	}
+	fmt.Printf("Found %d .rotato files. Generating device templates...\n", len(rotatoFiles))
 
-	type imageFile struct {
-		fullPath     string
-		relativePath string
-	}
-	var imageFiles []imageFile
-	var baseDir string
+	for i, rotatoFile := range rotatoFiles {
+		stem := strings.TrimSuffix(filepath.Base(rotatoFile), filepath.Ext(rotatoFile))
+		fmt.Printf("\n[%d/%d] %s\n", i+1, len(rotatoFiles), filepath.Base(rotatoFile))
 
-	if info, err := os.Stat(imagesInput); err == nil && info.IsDir() {
-		baseDir = imagesInput
-		err := filepath.Walk(imagesInput, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".png") {
-				relPath, _ := filepath.Rel(imagesInput, path)
-				imageFiles = append(imageFiles, imageFile{
-					fullPath:     path,
-					relativePath: relPath,
-				})
-			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("failed to walk directory: %w", err)
-		}
-	} else {
-		for _, f := range strings.Split(imagesInput, ",") {
-			f = strings.TrimSpace(f)
-			if f != "" {
-				imageFiles = append(imageFiles, imageFile{
-					fullPath:     f,
-					relativePath: filepath.Base(f),
-				})
-			}
-		}
-	}
-
-	if len(imageFiles) == 0 {
-		return fmt.Errorf("no image files found in %s", imagesInput)
-	}
-
-	if frameImage != nil {
-		fmt.Printf("Processing %d images using pre-rendered frame (fast path)...\n", len(imageFiles))
-	} else {
-		fmt.Printf("Processing %d images through Rotato UI automation (slow path)...\n", len(imageFiles))
-	}
-	if baseDir != "" && verbose {
-		fmt.Printf("Base directory: %s\n", baseDir)
-	}
-
-	for i, img := range imageFiles {
-		outputPath := filepath.Join(outputDir, img.relativePath)
-
-		outputSubDir := filepath.Dir(outputPath)
-		if err := os.MkdirAll(outputSubDir, 0755); err != nil {
-			return fmt.Errorf("failed to create output subdirectory: %w", err)
-		}
-
-		if verbose {
-			fmt.Printf("\n[%d/%d] %s\n", i+1, len(imageFiles), img.relativePath)
-		} else {
-			fmt.Printf("Processing: %s\n", img.relativePath)
-		}
-
+		// Check for cached raw render
+		rawPath := filepath.Join(outputDir, stem+".raw.png")
 		var rendered image.Image
-		var err error
-		if frameImage != nil {
-			rendered, err = rotato.RenderWithFrame(frameImage, frameMask, frameMeta, img.fullPath, 0, 0)
+
+		if cached, err := loadRawIfExists(rawPath); err == nil && cached != nil {
+			fmt.Printf("  Using cached raw render: %s\n", rawPath)
+			rendered = cached
 		} else {
-			rendered, err = rotato.RenderWithCLI(templateFile, img.fullPath, 0, 0, verbose)
+			// Generate magenta placeholder and render through Rotato
+			tmpDir, err := os.MkdirTemp("", "rotato-placeholder")
+			if err != nil {
+				return fmt.Errorf("failed to create temp dir: %w", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			placeholder := filepath.Join(tmpDir, "placeholder.png")
+			if verbose {
+				fmt.Printf("  Generating %dx%d magenta placeholder\n", w, h)
+			}
+			if err := rotato.GeneratePlaceholder(w, h, placeholder); err != nil {
+				return fmt.Errorf("failed to create placeholder: %w", err)
+			}
+
+			fmt.Printf("  Rendering through Rotato (UI automation, this takes ~20s)...\n")
+			rendered, err = rotato.RenderWithCLI(rotatoFile, placeholder, 0, 0, verbose)
+			if err != nil {
+				return fmt.Errorf("rotato render failed for %s: %w", filepath.Base(rotatoFile), err)
+			}
+
+			// Cache the raw render
+			if err := saveRawPNG(rawPath, rendered); err != nil {
+				fmt.Fprintf(os.Stderr, "  Warning: could not cache raw render: %v\n", err)
+			} else if verbose {
+				fmt.Printf("  Saved raw render: %s\n", rawPath)
+			}
 		}
+
+		// Detect frame and save template set
+		cleaned, mask, meta, err := rotato.DetectFrame(rendered, rotatoFile, w, h)
 		if err != nil {
-			return fmt.Errorf("failed to process %s: %w", img.relativePath, err)
+			return fmt.Errorf("frame analysis failed for %s: %w", filepath.Base(rotatoFile), err)
 		}
 
-		if err := imaging.Save(rendered, outputPath); err != nil {
-			return fmt.Errorf("failed to save %s: %w", outputPath, err)
+		pngPath, maskPath, jsonPath, err := rotato.SaveFrame(cleaned, mask, meta, outputDir, rotatoFile)
+		if err != nil {
+			return fmt.Errorf("failed to save template for %s: %w", filepath.Base(rotatoFile), err)
 		}
 
-		fmt.Printf("Generated: %s\n", outputPath)
+		// Save debug overlay
+		debugPath, derr := rotato.SaveDebugFrame(cleaned, meta, outputDir, rotatoFile)
+		if derr != nil {
+			fmt.Fprintf(os.Stderr, "  Warning: could not save debug overlay: %v\n", derr)
+		}
+
+		fmt.Printf("  Template saved:\n    PNG:  %s\n    Mask: %s\n    JSON: %s\n", pngPath, maskPath, jsonPath)
+		if derr == nil {
+			fmt.Printf("    Debug: %s\n", debugPath)
+		}
+		if meta.IsRectangle {
+			fmt.Printf("  Screen: rectangle %dx%d at (%d, %d)\n",
+				meta.RectangleRect[2], meta.RectangleRect[3],
+				meta.RectangleRect[0], meta.RectangleRect[1])
+		} else {
+			fmt.Printf("  Screen: perspective quad TL=%v TR=%v BR=%v BL=%v\n",
+				meta.Corners[0], meta.Corners[1], meta.Corners[2], meta.Corners[3])
+		}
 	}
 
-	fmt.Printf("\nDone! Processed %d images.\n", len(imageFiles))
+	fmt.Printf("\nDone! Generated %d device template sets in %s\n", len(rotatoFiles), outputDir)
 	return nil
 }

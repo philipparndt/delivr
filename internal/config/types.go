@@ -90,15 +90,12 @@ type GradientStop struct {
 
 // DeviceImage defines how to render the device screenshot
 type DeviceImage struct {
-	Mode          string  `yaml:"mode"`                     // "image", "rotato-cli", "rotato-template"
 	Source        string  `yaml:"source"`                   // path pattern with {device} placeholder
 	Width         int     `yaml:"width,omitempty"`          // 0 = auto from height
 	Height        int     `yaml:"height,omitempty"`         // target height
 	X             float64 `yaml:"x,omitempty"`              // offset from center
 	Y             float64 `yaml:"y,omitempty"`              // Y position
-	RoratoFile    string  `yaml:"rotato_file,omitempty"`    // for rotato-cli mode
-	Template      string  `yaml:"template,omitempty"`       // for rotato-template mode
-	TemplateRect  []int   `yaml:"template_rect,omitempty"`  // [x, y, w, h] for template screen area
+	Template      string  `yaml:"template,omitempty"`       // path to .frame.json device template
 	AutoCrop      bool    `yaml:"auto_crop,omitempty"`      // crop to content bounds (removes transparent padding)
 	CropThreshold int     `yaml:"crop_threshold,omitempty"` // alpha threshold 0-255 (default 10, lower includes more shadow)
 	CropPadding   int     `yaml:"crop_padding,omitempty"`   // padding around detected content bounds
