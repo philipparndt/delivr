@@ -1,0 +1,337 @@
+# Example configuration demonstrating Rotato integration
+#
+# Rotato is a macOS app for creating 3D device mockups.
+# This config shows two integration modes:
+#
+# 1. rotato-cli: Uses Rotato app via AppleScript to render 3D mockups
+#    - Requires Rotato to be installed and running on macOS
+#    - Produces high-quality 3D renders with lighting and reflections
+#    - Slower, but most flexible
+#
+# 2. rotato-template: Uses pre-exported Rotato frames as PNG templates
+#    - Works offline without Rotato running
+#    - Fast compositing
+#    - Export your Rotato scene once with a placeholder, then reuse
+
+settings:
+  fonts_dir: "/Library/Fonts"
+  screenshots_dir: "../../screenshots/dark"
+
+devices:
+  # iPhone 17 Pro Max - 6.9-inch display
+  iphone-6.9:
+    name: "iPhone 6.9-inch"
+    width: 1320
+    height: 2868
+    screenshot_prefix: "iPhone 17 Pro Max"
+
+  # iPhone 17 Pro - 6.3-inch display
+  iphone-6.3:
+    name: "iPhone 6.3-inch"
+    width: 1206
+    height: 2622
+    screenshot_prefix: "iPhone 17 Pro"
+
+templates:
+  rotato-3d:
+    title:
+      font: "SF-Pro-Display-Bold.otf"
+      size: 100
+      color: "#FFFFFF"
+      align: "center"
+      y: 150
+    subtitle:
+      font: "SF-Pro-Display-Regular.otf"
+      size: 48
+      color: "#FFFFFFCC"
+      align: "center"
+      y: 240
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#1a1a2e"
+        - pos: 1.0
+          color: "#16213e"
+
+screens:
+  # ============================================================
+  # Mode 1: rotato-cli
+  # ============================================================
+  # Uses AppleScript to control Rotato app:
+  # - Opens the .rotato project file
+  # - Injects the screenshot into the device screen
+  # - Exports the rendered result
+  #
+  # Requirements:
+  # - Rotato app installed on macOS
+  # - Rotato must be running (or will be launched)
+  # - .rotato file with a device mockup scene
+
+  # Left rotation examples
+  - id: "3d-left-tree"
+    template: "rotato-3d"
+    title:
+      text: "Tree Navigation"
+    subtitle:
+      text: "Browse your MQTT topics"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Tree View.png"
+      rotato_file: "../../iPhone17_rotated_left.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-left-json"
+    template: "rotato-3d"
+    title:
+      text: "JSON Viewer"
+    subtitle:
+      text: "Inspect message payloads"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-JSON Data.png"
+      rotato_file: "../../iPhone17_rotated_left.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  # Right rotation examples
+  - id: "3d-right-publish"
+    template: "rotato-3d"
+    title:
+      text: "Publish Messages"
+    subtitle:
+      text: "Send MQTT messages easily"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Publish.png"
+      rotato_file: "../../iPhone17_rotated_right.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-right-brokers"
+    template: "rotato-3d"
+    title:
+      text: "Multiple Brokers"
+    subtitle:
+      text: "Manage all your connections"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Brokers.png"
+      rotato_file: "../../iPhone17_rotated_right.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  # Z-axis rotation examples using rotated_z.rotato
+  - id: "3d-z-tree"
+    template: "rotato-3d"
+    title:
+      text: "Topic Browser"
+    subtitle:
+      text: "Navigate your MQTT tree"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Tree View.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-flat"
+    template: "rotato-3d"
+    title:
+      text: "Flat View"
+    subtitle:
+      text: "See all messages at once"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Flat View.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-json"
+    template: "rotato-3d"
+    title:
+      text: "JSON Inspector"
+    subtitle:
+      text: "Analyze message payloads"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-JSON Data.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-details"
+    template: "rotato-3d"
+    title:
+      text: "Syntax Highlighting"
+    subtitle:
+      text: "Beautiful JSON formatting"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-JSON Details.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-publish"
+    template: "rotato-3d"
+    title:
+      text: "Quick Publish"
+    subtitle:
+      text: "Send messages instantly"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Publish.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-brokers"
+    template: "rotato-3d"
+    title:
+      text: "Broker Manager"
+    subtitle:
+      text: "All connections in one place"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Brokers.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-config"
+    template: "rotato-3d"
+    title:
+      text: "Configuration"
+    subtitle:
+      text: "Customize your experience"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Config.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-context"
+    template: "rotato-3d"
+    title:
+      text: "Quick Actions"
+    subtitle:
+      text: "Context menu for everything"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Context Menu.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  - id: "3d-z-lights"
+    template: "rotato-3d"
+    title:
+      text: "Smart Home"
+    subtitle:
+      text: "Control your devices"
+    device:
+      mode: "rotato-cli"
+      source: "iPhone 17 Pro Max-Lights.png"
+      rotato_file: "../../rotated_z.rotato"
+      width: 0
+      height: 2000
+      x: 0
+      y: 500
+
+  # ============================================================
+  # Mode 2: rotato-template
+  # ============================================================
+  # Uses a pre-exported Rotato frame as a PNG template:
+  # - Template is a PNG with transparent screen area
+  # - Screenshot is composited into the template_rect area
+  # - Template frame is overlaid on top
+  #
+  # How to create a template:
+  # 1. Open your scene in Rotato
+  # 2. Set device screen to a solid color (e.g., green)
+  # 3. Export as PNG with transparency
+  # 4. In image editor, make the screen area transparent
+  # 5. Note the screen rectangle coordinates [x, y, width, height]
+  #
+  # This mode is faster and works without Rotato running.
+  #
+  # - id: "3d-template-example"
+  #   template: "rotato-3d"
+  #   title:
+  #     text: "Template Mode"
+  #   subtitle:
+  #     text: "Pre-rendered frame"
+  #   device:
+  #     mode: "rotato-template"
+  #     source: "iPhone 17 Pro Max-Publish.png"
+  #     template: "frames/iphone-rotated-frame.png"
+  #     template_rect: [185, 520, 720, 1560]  # x, y, width, height of screen area
+  #     width: 0
+  #     height: 2000
+  #     x: 0
+  #     y: 500
+
+outputs:
+  - device: "iphone-6.9"
+    screens:
+      # Left rotation
+      - "3d-left-tree"
+      - "3d-left-json"
+      # Right rotation
+      - "3d-right-publish"
+      - "3d-right-brokers"
+      # Z-axis rotation
+      - "3d-z-tree"
+      - "3d-z-flat"
+      - "3d-z-json"
+      - "3d-z-details"
+      - "3d-z-publish"
+      - "3d-z-brokers"
+      - "3d-z-config"
+      - "3d-z-context"
+      - "3d-z-lights"
+    prefix: "rotato"
+
+# ============================================================
+# Usage
+# ============================================================
+#
+# To use rotato-cli mode:
+#   1. Make sure Rotato is installed
+#   2. Run: ./imagegen -config configs/example-rotato.yaml -output ./rotato-output
+#   3. Rotato will open, inject screenshots, and export renders
+#
+# To use rotato-template mode:
+#   1. Export your Rotato scene as a PNG template (see instructions above)
+#   2. Uncomment the template example screen
+#   3. Adjust template_rect to match your template's screen area
+#   4. Run: ./imagegen -config configs/example-rotato.yaml -output ./rotato-output

@@ -1,0 +1,373 @@
+settings:
+  fonts_dir: "/Library/Fonts"
+  screenshots_dir: "../../screenshots/dark"
+
+devices:
+  # iPhone 17 Pro Max - 6.9-inch display
+  iphone-6.9:
+    name: "iPhone 6.9-inch"
+    width: 1320
+    height: 2868
+    screenshot_prefix: "iPhone 17 Pro Max"
+
+  # iPhone 17 Pro - 6.3-inch display
+  iphone-6.3:
+    name: "iPhone 6.3-inch"
+    width: 1206
+    height: 2622
+    screenshot_prefix: "iPhone 17 Pro"
+
+  # iPad Pro 13-inch (M5)
+  ipad-13:
+    name: "iPad 13-inch"
+    width: 2064
+    height: 2752
+    screenshot_prefix: "iPad Pro 13-inch (M5)"
+
+# Templates define reusable screen properties
+templates:
+  default:
+    title:
+      font: "SF-Pro-Display-Bold.otf"
+      size: 120
+      color: "#FFFFFF"
+      align: "center"
+      y: 180
+    subtitle:
+      font: "SF-Pro-Display-Regular.otf"
+      size: 56
+      color: "#FFFFFFCC"
+      align: "center"
+      y: 280
+    device:
+      mode: "image"
+      width: 0
+      height: 2200
+      x: 0
+      y: 450
+
+  ipad:
+    title:
+      font: "SF-Pro-Display-Bold.otf"
+      size: 140
+      color: "#FFFFFF"
+      align: "center"
+      y: 200
+    subtitle:
+      font: "SF-Pro-Display-Regular.otf"
+      size: 64
+      color: "#FFFFFFCC"
+      align: "center"
+      y: 320
+    device:
+      mode: "image"
+      width: 0
+      height: 2100
+      x: 0
+      y: 500
+
+screens:
+  # Tree View
+  - id: "tree-view"
+    template: "default"
+    title:
+      text: "Tree Navigation"
+    subtitle:
+      text: "Browse your MQTT topics"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#9B59B6"
+        - pos: 1.0
+          color: "#8E44AD"
+    device:
+      source: "{device}-Tree View.png"
+
+  # Flat View
+  - id: "flat-view"
+    template: "default"
+    title:
+      text: "Flat View"
+    subtitle:
+      text: "See all messages at once"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#16A085"
+        - pos: 1.0
+          color: "#1ABC9C"
+    device:
+      source: "{device}-Flat View.png"
+
+  # JSON Data
+  - id: "json-data"
+    template: "default"
+    title:
+      text: "JSON Viewer"
+    subtitle:
+      text: "Inspect message payloads"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#3498DB"
+        - pos: 1.0
+          color: "#2980B9"
+    device:
+      source: "{device}-JSON Data.png"
+
+  # JSON Details
+  - id: "json-details"
+    template: "default"
+    title:
+      text: "JSON Details"
+    subtitle:
+      text: "Syntax highlighting"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#2C3E50"
+        - pos: 1.0
+          color: "#34495E"
+    device:
+      source: "{device}-JSON Details.png"
+
+  # Publish
+  - id: "publish"
+    template: "default"
+    title:
+      text: "Publish Messages"
+    subtitle:
+      text: "Send MQTT messages easily"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#27AE60"
+        - pos: 1.0
+          color: "#1E8449"
+    device:
+      source: "{device}-Publish.png"
+
+  # Brokers
+  - id: "brokers"
+    template: "default"
+    title:
+      text: "Multiple Brokers"
+    subtitle:
+      text: "Manage all your connections"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#E74C3C"
+        - pos: 1.0
+          color: "#C0392B"
+    device:
+      source: "{device}-Brokers.png"
+
+  # Config
+  - id: "config"
+    template: "default"
+    title:
+      text: "Configuration"
+    subtitle:
+      text: "Customize your experience"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#8E44AD"
+        - pos: 1.0
+          color: "#9B59B6"
+    device:
+      source: "{device}-Config.png"
+
+  # Context Menu
+  - id: "context-menu"
+    template: "default"
+    title:
+      text: "Quick Actions"
+    subtitle:
+      text: "Context menu for everything"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#E67E22"
+        - pos: 1.0
+          color: "#D35400"
+    device:
+      source: "{device}-Context Menu.png"
+
+  # Lights
+  - id: "lights"
+    template: "default"
+    title:
+      text: "Smart Home"
+    subtitle:
+      text: "Control your devices"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#F39C12"
+        - pos: 1.0
+          color: "#F1C40F"
+    device:
+      source: "{device}-Lights.png"
+
+  # iPad-specific screens with iPad template
+  - id: "ipad-tree-view"
+    template: "ipad"
+    title:
+      text: "Tree Navigation"
+    subtitle:
+      text: "Browse your MQTT topics"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#9B59B6"
+        - pos: 1.0
+          color: "#8E44AD"
+    device:
+      source: "{device}-Tree View.png"
+
+  - id: "ipad-flat-view"
+    template: "ipad"
+    title:
+      text: "Flat View"
+    subtitle:
+      text: "See all messages at once"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#16A085"
+        - pos: 1.0
+          color: "#1ABC9C"
+    device:
+      source: "{device}-Flat View.png"
+
+  - id: "ipad-json-data"
+    template: "ipad"
+    title:
+      text: "JSON Viewer"
+    subtitle:
+      text: "Inspect message payloads"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#3498DB"
+        - pos: 1.0
+          color: "#2980B9"
+    device:
+      source: "{device}-JSON Data.png"
+
+  - id: "ipad-publish"
+    template: "ipad"
+    title:
+      text: "Publish Messages"
+    subtitle:
+      text: "Send MQTT messages easily"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#27AE60"
+        - pos: 1.0
+          color: "#1E8449"
+    device:
+      source: "{device}-Publish.png"
+
+  - id: "ipad-brokers"
+    template: "ipad"
+    title:
+      text: "Multiple Brokers"
+    subtitle:
+      text: "Manage all your connections"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#E74C3C"
+        - pos: 1.0
+          color: "#C0392B"
+    device:
+      source: "{device}-Brokers.png"
+
+  - id: "ipad-lights"
+    template: "ipad"
+    title:
+      text: "Smart Home"
+    subtitle:
+      text: "Control your devices"
+    background:
+      type: "gradient"
+      angle: 180
+      stops:
+        - pos: 0.0
+          color: "#F39C12"
+        - pos: 1.0
+          color: "#F1C40F"
+    device:
+      source: "{device}-Lights.png"
+
+outputs:
+  # iPhone 17 Pro Max
+  - device: "iphone-6.9"
+    screens:
+      - "tree-view"
+      - "flat-view"
+      - "json-data"
+      - "json-details"
+      - "publish"
+      - "brokers"
+      - "config"
+      - "context-menu"
+      - "lights"
+    prefix: "iPhone 17 Pro Max"
+
+  # iPhone 17 Pro
+  - device: "iphone-6.3"
+    screens:
+      - "tree-view"
+      - "flat-view"
+      - "json-data"
+      - "json-details"
+      - "publish"
+      - "brokers"
+      - "config"
+      - "context-menu"
+      - "lights"
+    prefix: "iPhone 17 Pro"
+
+  # iPad Pro 13-inch
+  - device: "ipad-13"
+    screens:
+      - "ipad-tree-view"
+      - "ipad-flat-view"
+      - "ipad-json-data"
+      - "ipad-publish"
+      - "ipad-brokers"
+      - "ipad-lights"
+    prefix: "iPad Pro 13-inch (M5)"

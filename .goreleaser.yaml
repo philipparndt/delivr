@@ -1,0 +1,76 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/philipparndt/delivr/version.Version={{.Version}} -X github.com/philipparndt/delivr/version.GitCommit={{.Commit}} -X github.com/philipparndt/delivr/version.BuildDate={{.Date}}
+    main: ./cmd/delivr
+
+release:
+  github:
+    owner: philipparndt
+    name: delivr
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+brews:
+  - name: delivr
+
+    goamd64: v1
+
+    url_template: "https://github.com/philipparndt/delivr/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+
+    commit_author:
+      name: Philipp Arndt
+      email: opensource@rnd7.de
+
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+
+    directory: Formula
+
+    caveats: "Run using delivr."
+
+    homepage: "https://github.com/philipparndt/delivr"
+
+    description: "App Store screenshot generator and delivery tool"
+
+    license: "Apache-2.0"
+
+    install: |
+      bin.install "delivr"
+
+    repository:
+      owner: philipparndt
+      name: homebrew-delivr
+      branch: main
+
+      pull_request:
+        enabled: false
+        draft: false
