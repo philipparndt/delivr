@@ -1,6 +1,7 @@
 .claude/
 *output/
 imagegen
+/delivr
 .idea
 example/templates
 example/apple-frames

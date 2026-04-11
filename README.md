@@ -4,13 +4,14 @@ A lightweight App Store screenshot generator and delivery tool — a fastlane al
 
 ## Features
 
-- Generate professional App Store screenshots from YAML configuration
-- Multi-device support (iPhone, iPad) with configurable dimensions
-- Gradient and solid color backgrounds with text overlays
+- Capture screenshots from iOS simulators and macOS with parallel execution
+- Generate professional App Store screenshots with device frames, backgrounds, and text
 - 3D device mockups via [Rotato](https://rotato.app) integration (macOS)
+- Download and import Apple's official device bezels
 - Upload screenshots and metadata to App Store Connect
 - Multi-language/localization support
-- Parallel rendering for fast iteration
+- Unified `delivr.yaml` config with `!include` support for modular organization
+- Claude Code commands for changelog, description, and translation workflows
 - Shell completion (bash, zsh, fish, powershell)
 
 ## Installation
@@ -33,105 +34,116 @@ cd delivr
 make build
 ```
 
-## Usage
-
-### Capture Screenshots from Simulators
-
-Run UI tests on iOS simulators (and macOS) to capture screenshots with
-status bar override, dark/light mode, and parallel execution:
+## Quick Start
 
 ```bash
-delivr capture --config capture.yaml
-```
+# Initialize a new project (interactive device selection)
+delivr init
 
-See `configs/example-capture.yaml` for a full config example. Replace
-fastlane's `SnapshotHelper.swift` with the one in `snapshot/` — same
-`snapshot("name")` API, no fastlane dependency.
+# Set up your SnapshotHelper
+delivr capture init -o path/to/MyUITests/SnapshotHelper.swift
 
-### Generate App Store Screenshots
+# Capture screenshots from simulators
+delivr capture --config delivr.yaml
 
-Compose captured screenshots into final App Store images with device
-frames, backgrounds, and text:
+# Generate App Store screenshots
+delivr generate --config delivr.yaml
 
-```bash
-delivr generate --config config.yaml --output ./output --verbose
-
-# Shorthand (generate is the default command)
-delivr --config config.yaml
-```
-
-### Generate Device Templates from Rotato
-
-Generate device template sets (frame + mask + metadata) from `.rotato` files.
-This is a one-time setup step — templates are then referenced in your screenshot config.
-
-```bash
-delivr rotato --input ./rotato-files --output ./frames
-
-# Custom placeholder dimensions (e.g., for iPad)
-delivr rotato --input ./rotato-files --output ./frames --dim 2064x2752
-```
-
-### Download Apple Device Bezels (macOS)
-
-Download official Apple device bezels directly from Apple's CDN:
-
-```bash
-# Download all available bezels
-delivr frames download --output ./bezels
-
-# Download only iPhone 17
-delivr frames download --output ./bezels --device iphone-17
-
-# List available devices
-delivr frames download --list
-```
-
-### Import Device Bezels to Templates
-
-Convert bezel PNGs (downloaded or custom) into device template sets:
-
-```bash
-delivr frames --input ./bezels --output ./frames
-```
-
-### Deliver to App Store Connect
-
-```bash
-delivr deliver --config appstore.yaml --screenshots ./output
-```
-
-### List Display Types
-
-```bash
-delivr deliver list-display-types --config appstore.yaml
-```
-
-### Shell Completion
-
-```bash
-# Bash
-source <(delivr completion bash)
-
-# Zsh
-delivr completion zsh > "${fpath[1]}/_delivr"
-
-# Fish
-delivr completion fish | source
-```
-
-### Version
-
-```bash
-delivr version
+# Deliver to App Store Connect
+delivr deliver --config delivr.yaml
 ```
 
 ## Configuration
 
-Screenshots are defined in YAML config files. See `configs/` for examples:
+delivr uses a unified `delivr.yaml` root config with `!include` support for modular organization:
+
+```yaml
+# delivr.yaml
+settings:
+  fonts_dir: "/Library/Fonts"
+  bundle_id: "com.example.myapp"
+
+devices: !include devices.yaml
+
+capture:
+  project: ../src/MyApp.xcodeproj
+  scheme: MyApp
+  test_target: MyAppUITests/ScreenshotTests
+  appearances: [dark, light]
+  parallel: true
+
+generate:
+  templates: !include templates.yaml
+  screens:
+    - !include screens/iphone.yaml
+    - !include screens/ipad.yaml
+  outputs: !include outputs.yaml
+
+deliver:
+  metadata_dir: ./metadata
+  screenshots_dir: ./output/appstore
+```
+
+Run `delivr init` to generate a complete project scaffold interactively.
+
+## Commands
+
+### `delivr init`
+
+Initialize a new project with example configs, metadata templates, and Claude Code commands.
+
+### `delivr capture`
+
+Capture screenshots from iOS simulators and macOS with status bar override, dark/light mode, and parallel execution.
+
+```bash
+delivr capture --config delivr.yaml
+```
+
+### `delivr generate`
+
+Compose captured screenshots into App Store images with device frames, backgrounds, and text.
+
+```bash
+delivr generate --config delivr.yaml
+```
+
+### `delivr frames`
+
+Generate device templates from bezel PNGs or download Apple's official bezels.
+
+```bash
+# Download Apple bezels
+delivr frames download --output ./bezels --device iphone-17
+
+# Convert to templates
+delivr frames --input ./bezels --output ./frames
+
+# Generate from Rotato files
+delivr rotato --input ./rotato-files --output ./frames
+```
+
+### `delivr deliver`
+
+Upload screenshots and metadata to App Store Connect.
+
+```bash
+delivr deliver --config delivr.yaml
+```
+
+### `delivr capture init`
+
+Generate the SnapshotHelper.swift for your UI test target.
+
+```bash
+delivr capture init -o path/to/MyUITests/SnapshotHelper.swift
+```
+
+## Example Configs
 
 - `configs/example.yaml` — Basic flat screenshots
 - `configs/example-rotato.yaml` — Device templates with 3D Rotato mockups
+- `configs/example-capture.yaml` — Simulator screenshot capture
 
 ## License
 

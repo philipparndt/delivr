@@ -47,9 +47,24 @@ func runGenerate(configPath, outputDir string, verbose bool) error {
 		fmt.Printf("Loading config from %s\n", configPath)
 	}
 
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Auto-detect root config vs standalone
+	var cfg *config.Config
+	isRoot, _ := config.IsRootConfig(configPath)
+	if isRoot {
+		rootCfg, err := config.LoadRootConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		cfg = rootCfg.ToGenerateConfig()
+		if rootCfg.Generate != nil && rootCfg.Generate.Output != "" && outputDir == "./output" {
+			outputDir = rootCfg.Generate.Output
+		}
+	} else {
+		var err error
+		cfg, err = config.Load(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
 	}
 
 	if verbose {

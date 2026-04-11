@@ -2,17 +2,16 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Load reads and parses the YAML configuration file
+// Load reads and parses the YAML configuration file with !include support.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := LoadWithIncludes(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		return nil, fmt.Errorf("failed to load config file: %w", err)
 	}
 
 	var cfg Config

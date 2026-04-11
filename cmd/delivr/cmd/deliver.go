@@ -50,9 +50,27 @@ var deliverCmd = &cobra.Command{
 			return fmt.Errorf("API credentials required (--key-id, --issuer-id, and --key-file or --key-pem)")
 		}
 
-		cfg, err := config.Load(deliverConfigFile)
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
+		// Auto-detect root config vs standalone
+		var cfg *config.Config
+		isRoot, _ := config.IsRootConfig(deliverConfigFile)
+		if isRoot {
+			rootCfg, err := config.LoadRootConfig(deliverConfigFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			cfg = rootCfg.ToGenerateConfig()
+			if rootCfg.Deliver != nil && rootCfg.Deliver.MetadataDir != "" && deliverMetadataDir == "" {
+				deliverMetadataDir = rootCfg.Deliver.MetadataDir
+			}
+			if rootCfg.Deliver != nil && rootCfg.Deliver.ScreenshotsDir != "" && deliverScreenshotsDir == "" {
+				deliverScreenshotsDir = rootCfg.Deliver.ScreenshotsDir
+			}
+		} else {
+			var err error
+			cfg, err = config.Load(deliverConfigFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 		}
 
 		if cfg.Settings.BundleID == "" {
