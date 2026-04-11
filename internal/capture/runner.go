@@ -9,27 +9,51 @@ import (
 	"strings"
 )
 
-// BuildForTesting runs `xcodebuild build-for-testing` once so that parallel
-// test runs can use `test-without-building` without locking the build DB.
+// BuildForTesting runs `xcodebuild build-for-testing` for each platform
+// separately. Mixing macOS and iOS Simulator destinations in a single
+// xcodebuild invocation can cause SIGTRAP crashes in some Xcode versions.
 func BuildForTesting(project, scheme string, devices []DeviceConfig, verbose bool) error {
-	// Build for all destinations
-	args := []string{
-		"build-for-testing",
-		"-project", project,
-		"-scheme", scheme,
-	}
+	// Group destinations by platform to build separately
+	var iosDestinations []string
+	hasMacOS := false
 
-	// Add all destinations so Xcode builds for all required platforms
 	for _, device := range devices {
 		if device.Platform == "macos" {
-			args = append(args, "-destination", "platform=macOS")
+			hasMacOS = true
 		} else {
 			result, err := FindDevice(device.Name)
 			if err != nil {
 				continue
 			}
-			args = append(args, "-destination", fmt.Sprintf("platform=iOS Simulator,id=%s", result.UDID))
+			iosDestinations = append(iosDestinations, fmt.Sprintf("platform=iOS Simulator,id=%s", result.UDID))
 		}
+	}
+
+	// Build for iOS Simulator destinations
+	if len(iosDestinations) > 0 {
+		if err := runBuildForTesting(project, scheme, iosDestinations, verbose); err != nil {
+			return err
+		}
+	}
+
+	// Build for macOS separately
+	if hasMacOS {
+		if err := runBuildForTesting(project, scheme, []string{"platform=macOS,arch=arm64"}, verbose); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func runBuildForTesting(project, scheme string, destinations []string, verbose bool) error {
+	args := []string{
+		"build-for-testing",
+		"-project", project,
+		"-scheme", scheme,
+	}
+	for _, dest := range destinations {
+		args = append(args, "-destination", dest)
 	}
 
 	cmd := exec.Command("xcodebuild", args...)
@@ -61,7 +85,7 @@ func BuildForTesting(project, scheme string, devices []DeviceConfig, verbose boo
 func RunTests(project, scheme, testTarget, deviceName, platform, udid string, verbose bool) error {
 	var destination string
 	if platform == "macos" {
-		destination = "platform=macOS"
+		destination = "platform=macOS,arch=arm64"
 	} else {
 		destination = fmt.Sprintf("platform=iOS Simulator,id=%s", udid)
 	}
@@ -71,6 +95,7 @@ func RunTests(project, scheme, testTarget, deviceName, platform, udid string, ve
 		"-project", project,
 		"-scheme", scheme,
 		"-destination", destination,
+		"-parallel-testing-enabled", "NO",
 	}
 
 	if testTarget != "" {

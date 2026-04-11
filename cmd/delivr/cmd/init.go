@@ -86,7 +86,7 @@ func runInit() error {
 	dirs := []string{
 		"screens",
 		"metadata/en-US",
-		".claude/commands",
+		".claude/commands/delivr",
 	}
 	for _, d := range dirs {
 		os.MkdirAll(d, 0755)
@@ -112,10 +112,10 @@ func runInit() error {
 	writeIfNotExists("metadata/en-US/promotional_text.md", "Short promotional text for the App Store.\n")
 	writeIfNotExists("metadata/en-US/release_notes.md", "- Bug fixes and improvements\n")
 
-	// Generate Claude commands
-	writeIfNotExists(".claude/commands/changelog.md", generateChangelogCommand())
-	writeIfNotExists(".claude/commands/update-description.md", generateUpdateDescriptionCommand())
-	writeIfNotExists(".claude/commands/translate.md", generateTranslateCommand())
+	// Generate Claude Code slash commands (invoked as /delivr:changelog etc.)
+	writeIfNotExists(".claude/commands/delivr/changelog.md", generateChangelogCommand())
+	writeIfNotExists(".claude/commands/delivr/update-description.md", generateUpdateDescriptionCommand())
+	writeIfNotExists(".claude/commands/delivr/translate.md", generateTranslateCommand())
 
 	fmt.Println(doneStyle.Render("Project initialized!"))
 	fmt.Println()
@@ -126,7 +126,7 @@ func runInit() error {
 	fmt.Println("  screens/example.yaml     Example screens")
 	fmt.Println("  outputs.yaml             Output mappings")
 	fmt.Println("  metadata/en-US/          App Store text templates")
-	fmt.Println("  .claude/commands/        AI helper commands")
+	fmt.Println("  .claude/commands/delivr/  AI slash commands (/delivr:changelog, etc.)")
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Println("  1. Edit delivr.yaml to set your Xcode project path")
@@ -271,24 +271,25 @@ generate:
 }
 
 func generateChangelogCommand() string {
-	return `Generate a changelog from recent git commits.
+	return `Generate release notes from recent git commits.
 
-Read the git log since the last tag and create a user-friendly changelog
-suitable for App Store release notes.
+Read the git log since the last tag and create user-friendly release notes for the App Store.
 
 Steps:
 1. Run: git log $(git describe --tags --abbrev=0)..HEAD --oneline
 2. Group changes by type (features, fixes, improvements)
-3. Write the changelog to metadata/en-US/release_notes.md
+3. Write the result to metadata/en-US/release_notes.md
 4. Keep it concise — App Store limits to 4000 characters
+5. Focus on user-visible changes, skip internal refactors
 `
 }
 
 func generateUpdateDescriptionCommand() string {
 	return `Update the App Store description based on the current app features.
 
-Read the current description from metadata/en-US/description.md and
-update it to reflect the latest features and improvements.
+Read the current description from metadata/en-US/description.md, review the app's
+source code and recent changes, then update the description to reflect the latest
+features and improvements.
 
 Guidelines:
 - Keep it under 4000 characters
@@ -303,17 +304,17 @@ func generateTranslateCommand() string {
 	return `Translate App Store metadata to all configured languages.
 
 Read the English metadata files from metadata/en-US/ and translate them
-to the languages defined in delivr.yaml.
+to all other language directories under metadata/.
 
-For each language:
-1. Read metadata/en-US/description.md → Write to metadata/{lang}/description.md
-2. Read metadata/en-US/promotional_text.md → Write to metadata/{lang}/promotional_text.md
-3. Read metadata/en-US/release_notes.md → Write to metadata/{lang}/release_notes.md
+For each language directory found under metadata/:
+1. Read metadata/en-US/description.md and write translation to metadata/{lang}/description.md
+2. Read metadata/en-US/promotional_text.md and write to metadata/{lang}/promotional_text.md
+3. Read metadata/en-US/release_notes.md and write to metadata/{lang}/release_notes.md
 
 Translation guidelines:
 - Maintain the same structure and formatting
 - Keep app-specific terms (brand names, feature names) untranslated
-- Adapt idioms naturally — don't translate literally
+- Adapt idioms naturally, do not translate literally
 - Respect character limits for each field
 `
 }

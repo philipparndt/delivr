@@ -10,14 +10,15 @@ import (
 
 // Config defines the capture configuration for screenshot generation.
 type Config struct {
-	Project    string          `yaml:"project"`
-	Scheme     string          `yaml:"scheme"`
-	TestTarget string          `yaml:"test_target"`
-	Output     string          `yaml:"output"`
-	Devices    []DeviceConfig  `yaml:"devices"`
-	Appearances []string       `yaml:"appearances"`
-	StatusBar  StatusBarConfig `yaml:"status_bar"`
-	Parallel   bool            `yaml:"parallel"`
+	Project        string          `yaml:"project"`
+	Scheme         string          `yaml:"scheme"`
+	TestTarget     string          `yaml:"test_target"`
+	Output         string          `yaml:"output"`
+	Devices        []DeviceConfig  `yaml:"devices"`
+	Appearances    []string        `yaml:"appearances"`
+	StatusBar      StatusBarConfig `yaml:"status_bar"`
+	Parallel       bool            `yaml:"parallel"`
+	MacOSWindowSize [2]int         `yaml:"macos_window_size"` // [width, height], default 1200x720
 }
 
 // DeviceConfig defines a device to capture screenshots on.
@@ -79,6 +80,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if len(cfg.Appearances) == 0 {
 		cfg.Appearances = []string{"light"}
+	}
+	if cfg.MacOSWindowSize == [2]int{0, 0} {
+		cfg.MacOSWindowSize = [2]int{1200, 720}
 	}
 
 	return &cfg, nil

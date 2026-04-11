@@ -10,12 +10,13 @@ import (
 
 func captureConfigFromRoot(root *config.RootConfig) *capture.Config {
 	cfg := &capture.Config{
-		Project:    root.Capture.Project,
-		Scheme:     root.Capture.Scheme,
-		TestTarget: root.Capture.TestTarget,
-		Output:     root.Capture.Output,
-		Appearances: root.Capture.Appearances,
-		Parallel:   root.Capture.Parallel,
+		Project:         root.Capture.Project,
+		Scheme:          root.Capture.Scheme,
+		TestTarget:      root.Capture.TestTarget,
+		Output:          root.Capture.Output,
+		Appearances:     root.Capture.Appearances,
+		Parallel:        root.Capture.Parallel,
+		MacOSWindowSize: root.Capture.MacOSWindowSize,
 		StatusBar: capture.StatusBarConfig{
 			Time:         root.Capture.StatusBar.Time,
 			WifiBars:     root.Capture.StatusBar.WifiBars,
@@ -41,6 +42,7 @@ func captureConfigFromRoot(root *config.RootConfig) *capture.Config {
 	if cfg.StatusBar.BatteryLevel == 0 { cfg.StatusBar.BatteryLevel = 100 }
 	if cfg.StatusBar.BatteryState == "" { cfg.StatusBar.BatteryState = "charged" }
 	if len(cfg.Appearances) == 0 { cfg.Appearances = []string{"light"} }
+	if cfg.MacOSWindowSize == [2]int{0, 0} { cfg.MacOSWindowSize = [2]int{1200, 720} }
 
 	return cfg
 }

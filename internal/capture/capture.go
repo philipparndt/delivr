@@ -221,27 +221,29 @@ func runIOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, tr
 }
 
 func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, tracker *ProgressTracker, verbose bool) error {
+	// Save current macOS appearance to restore later
+	originalDarkMode, err := getMacOSDarkMode()
+	if err != nil {
+		originalDarkMode = false // default to light if we can't read it
+	}
+
 	// Write SnapshotHelper config for macOS
 	tracker.Update(index, StepWritingConfig)
-	if err := WriteHelperConfigMacOS(job.Device.Name, helperDir); err != nil {
+	if err := WriteHelperConfigMacOS(job.Device.Name, helperDir, cfg.MacOSWindowSize); err != nil {
 		return fmt.Errorf("failed to write helper config: %w", err)
 	}
 
 	// Set macOS appearance
 	tracker.Update(index, StepMacOSAppearance)
-	var appearanceValue string
-	if job.Appearance == "dark" {
-		appearanceValue = "true"
-	} else {
-		appearanceValue = "false"
-	}
-	setAppearanceScript := fmt.Sprintf(
-		`tell application "System Events" to tell appearance preferences to set dark mode to %s`,
-		appearanceValue,
-	)
-	if err := runOsascript(setAppearanceScript); err != nil {
+	wantDark := job.Appearance == "dark"
+	if err := setMacOSDarkMode(wantDark); err != nil {
 		return fmt.Errorf("failed to set macOS appearance: %w", err)
 	}
+
+	// Ensure we restore the original appearance when done
+	defer func() {
+		_ = setMacOSDarkMode(originalDarkMode)
+	}()
 
 	// Run tests with screenshot count polling
 	tracker.Update(index, StepRunningTests+" (0 screenshots)")
@@ -265,6 +267,43 @@ func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, 
 
 func runOsascript(script string) error {
 	return exec.Command("osascript", "-e", script).Run()
+}
+
+// getMacOSDarkMode returns true if macOS is currently in dark mode.
+func getMacOSDarkMode() (bool, error) {
+	out, err := exec.Command("osascript", "-e",
+		`tell application "System Events" to tell appearance preferences to get dark mode`).Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
+}
+
+// setMacOSDarkMode sets macOS dark mode on or off.
+func setMacOSDarkMode(dark bool) error {
+	val := "false"
+	if dark {
+		val = "true"
+	}
+	return runOsascript(fmt.Sprintf(
+		`tell application "System Events" to tell appearance preferences to set dark mode to %s`, val))
+}
+
+// resizeMacOSWindow resizes the frontmost window of the given app to width×height
+// and centers it on screen.
+func resizeMacOSWindow(appName string, width, height int) error {
+	script := fmt.Sprintf(`
+tell application "System Events"
+	tell process "%s"
+		set frontmost to true
+		delay 0.5
+		tell window 1
+			set size to {%d, %d}
+			set position to {100, 100}
+		end tell
+	end tell
+end tell`, appName, width, height)
+	return runOsascript(script)
 }
 
 // pollScreenshots polls a directory for .png files and updates the tracker

@@ -44,6 +44,8 @@ open class Snapshot: NSObject {
     static var outputDir: String = ""
     static var waitForAnimations: Bool = true
     static var cacheDirectory: URL?
+    static var windowSize: (width: Int, height: Int)?
+    static var windowResized: Bool = false
 
     open class func setupSnapshot(_ app: XCUIApplication, waitForAnimations: Bool = true) {
         self.app = app
@@ -54,6 +56,13 @@ open class Snapshot: NSObject {
             deviceName = config.deviceName
             outputDir = config.outputDir
             NSLog("delivr: Configured for device '\(deviceName)', output: \(outputDir)")
+
+            #if os(macOS)
+            if let ws = config.windowSize, ws.count == 2, ws[0] > 0 && ws[1] > 0 {
+                windowSize = (width: ws[0], height: ws[1])
+                NSLog("delivr: Will resize window to \(ws[0])x\(ws[1])")
+            }
+            #endif
         } else {
             // Fallback: use simulator device name from environment
             deviceName = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? "Unknown"
@@ -69,6 +78,19 @@ open class Snapshot: NSObject {
             NSLog("delivr: SnapshotHelper not initialized. Call setupSnapshot() first.")
             return
         }
+
+        #if os(macOS)
+        // Resize window on first snapshot call (after app has launched)
+        if !windowResized, let size = windowSize {
+            windowResized = true
+            let window = app.windows.firstMatch
+            if window.exists {
+                window.frame = CGRect(x: 100, y: 100, width: CGFloat(size.width), height: CGFloat(size.height))
+                NSLog("delivr: Resized window to \(size.width)x\(size.height)")
+                sleep(1) // Wait for layout to settle
+            }
+        }
+        #endif
 
         if waitForAnimations {
             sleep(1) // Brief pause for animations to settle
@@ -103,10 +125,12 @@ open class Snapshot: NSObject {
     struct DelivrConfig: Codable {
         let deviceName: String
         let outputDir: String
+        let windowSize: [Int]?
 
         enum CodingKeys: String, CodingKey {
             case deviceName = "device_name"
             case outputDir = "output_dir"
+            case windowSize = "window_size"
         }
     }
 
@@ -117,7 +141,11 @@ open class Snapshot: NSObject {
         let udid: String
         #if os(macOS)
             udid = "macos"
-            let homeDir = URL(fileURLWithPath: NSHomeDirectory())
+            // NSHomeDirectory() returns the sandbox container path on macOS,
+            // so we resolve the real home via the passwd database.
+            let pw = getpwuid(getuid())
+            let realHome = pw.map { String(cString: $0.pointee.pw_dir) } ?? NSHomeDirectory()
+            let homeDir = URL(fileURLWithPath: realHome)
         #else
             guard let simUDID = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] else {
                 NSLog("delivr: SIMULATOR_UDID not set — running on physical device?")

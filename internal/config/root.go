@@ -29,13 +29,14 @@ type UnifiedDevice struct {
 
 // CaptureSection defines capture settings in the root config.
 type CaptureSection struct {
-	Project     string            `yaml:"project"`
-	Scheme      string            `yaml:"scheme"`
-	TestTarget  string            `yaml:"test_target"`
-	Output      string            `yaml:"output,omitempty"`
-	Appearances []string          `yaml:"appearances,omitempty"`
-	StatusBar   StatusBarSection  `yaml:"status_bar,omitempty"`
-	Parallel    bool              `yaml:"parallel,omitempty"`
+	Project         string            `yaml:"project"`
+	Scheme          string            `yaml:"scheme"`
+	TestTarget      string            `yaml:"test_target"`
+	Output          string            `yaml:"output,omitempty"`
+	Appearances     []string          `yaml:"appearances,omitempty"`
+	StatusBar       StatusBarSection  `yaml:"status_bar,omitempty"`
+	Parallel        bool              `yaml:"parallel,omitempty"`
+	MacOSWindowSize [2]int            `yaml:"macos_window_size,omitempty"` // [width, height]
 }
 
 // StatusBarSection mirrors capture.StatusBarConfig for the root config.
