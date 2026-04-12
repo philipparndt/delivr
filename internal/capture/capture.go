@@ -224,7 +224,7 @@ func runIOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, tr
 	}
 
 	// Collect screenshots
-	count, err := CollectScreenshots(helperDir, cfg.Output, job.Appearance, verbose)
+	count, err := CollectScreenshots(helperDir, cfg.Output, job.Appearance, DeviceCategory(job.Device.Name, job.Device.Platform), verbose)
 	if err != nil {
 		return fmt.Errorf("failed to collect screenshots: %w", err)
 	}
@@ -259,19 +259,14 @@ func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, 
 	}()
 
 	// Run tests with screenshot count polling.
-	// Poll the sandbox container path where screencapture writes.
+	// Poll the sandbox container dynamically (it may not exist yet at start).
 	tracker.Update(index, StepRunningTests+" (0 screenshots)")
 	home, _ := os.UserHomeDir()
-	containerScreenshotsDir := findMacOSContainerScreenshotsDir(home)
-	if containerScreenshotsDir != "" {
-		// Clear any stale screenshots from previous run
-		os.RemoveAll(containerScreenshotsDir)
+	// Clear stale screenshots from any previous run
+	if stale := findMacOSContainerScreenshotsDir(home); stale != "" {
+		os.RemoveAll(stale)
 	}
-	pollDir := helperDir
-	if containerScreenshotsDir != "" {
-		pollDir = containerScreenshotsDir
-	}
-	stopPolling := pollScreenshots(pollDir, index, tracker)
+	stopPolling := pollMacOSScreenshots(home, index, tracker)
 	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "macos", "", verbose)
 	stopPolling()
 
@@ -287,7 +282,7 @@ func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, 
 	defer os.RemoveAll(actualDir)
 
 	// Collect screenshots
-	count, err := CollectScreenshots(actualDir, cfg.Output, job.Appearance, verbose)
+	count, err := CollectScreenshots(actualDir, cfg.Output, job.Appearance, DeviceCategory(job.Device.Name, job.Device.Platform), verbose)
 	if err != nil {
 		return fmt.Errorf("failed to collect screenshots: %w", err)
 	}
@@ -351,6 +346,33 @@ tell application "System Events"
 	end tell
 end tell`, appName, width, height)
 	return runOsascript(script)
+}
+
+// pollMacOSScreenshots polls for macOS screenshots by dynamically discovering
+// the sandbox container directory on each tick (since it may not exist at start).
+func pollMacOSScreenshots(home string, index int, tracker *ProgressTracker) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		lastCount := 0
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				count := 0
+				if dir := findMacOSContainerScreenshotsDir(home); dir != "" {
+					count = countPNGs(dir)
+				}
+				if count != lastCount {
+					lastCount = count
+					tracker.Update(index, fmt.Sprintf("%s (%d screenshots)", StepRunningTests, count))
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 // pollScreenshots polls a directory for .png files and updates the tracker

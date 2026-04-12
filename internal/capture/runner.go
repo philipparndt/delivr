@@ -146,10 +146,23 @@ func RunTests(project, scheme, testTarget, deviceName, platform, udid string, ve
 	return nil
 }
 
+// DeviceCategory returns a short category name for organizing screenshots.
+func DeviceCategory(deviceName, platform string) string {
+	lower := strings.ToLower(deviceName)
+	switch {
+	case platform == "macos" || strings.Contains(lower, "macos") || strings.Contains(lower, "mac"):
+		return "mac"
+	case strings.Contains(lower, "ipad"):
+		return "iPad"
+	default:
+		return "iPhone"
+	}
+}
+
 // CollectScreenshots moves screenshots from the helper output directory to the
-// final destination organized by appearance.
-func CollectScreenshots(helperOutputDir, finalDir, appearance string, verbose bool) (int, error) {
-	appearanceDir := filepath.Join(finalDir, appearance)
+// final destination organized by appearance and device category.
+func CollectScreenshots(helperOutputDir, finalDir, appearance, deviceCategory string, verbose bool) (int, error) {
+	appearanceDir := filepath.Join(finalDir, appearance, deviceCategory)
 	if err := os.MkdirAll(appearanceDir, 0755); err != nil {
 		return 0, fmt.Errorf("failed to create output directory: %w", err)
 	}
