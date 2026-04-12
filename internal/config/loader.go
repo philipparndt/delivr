@@ -145,12 +145,9 @@ func mergeDeviceImage(base, override *DeviceImage) *DeviceImage {
 	if override.Height != 0 {
 		result.Height = override.Height
 	}
-	if override.X != 0 {
-		result.X = override.X
-	}
-	if override.Y != 0 {
-		result.Y = override.Y
-	}
+	// X and Y are additive: screen values offset the template defaults
+	result.X += override.X
+	result.Y += override.Y
 	if override.Template != "" {
 		result.Template = override.Template
 	}

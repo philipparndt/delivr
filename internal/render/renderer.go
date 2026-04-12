@@ -88,7 +88,7 @@ func (r *Renderer) RenderAll() error {
 
 	// Set up progress bar
 	bar := progress.New(
-		progress.WithGradient("#1A6B5A", "#0F8B6E"),
+		progress.WithSolidFill("#1A6B5A"),
 		progress.WithWidth(50),
 		progress.WithoutPercentage(),
 	)

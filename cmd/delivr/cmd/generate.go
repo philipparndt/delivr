@@ -12,9 +12,10 @@ var configPath string
 var outputDir string
 
 var generateCmd = &cobra.Command{
-	Use:   "generate",
-	Short: "Generate App Store screenshots from config",
-	Long:  GetHelp("generate"),
+	Use:          "generate",
+	Short:        "Generate App Store screenshots from config",
+	Long:         GetHelp("generate"),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := configPath
 		if cfg == "" {
@@ -55,7 +56,10 @@ func runGenerate(configPath, outputDir string, verbose bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
-		cfg = rootCfg.ToGenerateConfig()
+		cfg, err = rootCfg.ToGenerateConfig()
+		if err != nil {
+			return fmt.Errorf("failed to prepare generate config: %w", err)
+		}
 		if rootCfg.Generate != nil && rootCfg.Generate.Output != "" && outputDir == "./output" {
 			outputDir = rootCfg.Generate.Output
 		}

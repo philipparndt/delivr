@@ -21,7 +21,8 @@ var framesOutputDir string
 var framesCmd = &cobra.Command{
 	Use:   "frames",
 	Short: "Generate device templates from bezel PNGs",
-	Long:  GetHelp("frames"),
+	Long:         GetHelp("frames"),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if framesInputDir == "" || framesOutputDir == "" {
 			return cmd.Help()

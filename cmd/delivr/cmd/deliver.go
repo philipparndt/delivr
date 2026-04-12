@@ -36,7 +36,8 @@ var localeFileSuffix = map[string]string{
 var deliverCmd = &cobra.Command{
 	Use:   "deliver",
 	Short: "Upload metadata and screenshots to App Store Connect",
-	Long:  GetHelp("deliver"),
+	Long:         GetHelp("deliver"),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if deliverConfigFile == "" {
 			return fmt.Errorf("--config is required")
@@ -58,7 +59,10 @@ var deliverCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
-			cfg = rootCfg.ToGenerateConfig()
+			cfg, err = rootCfg.ToGenerateConfig()
+			if err != nil {
+				return fmt.Errorf("failed to prepare config: %w", err)
+			}
 			if rootCfg.Deliver != nil && rootCfg.Deliver.MetadataDir != "" && deliverMetadataDir == "" {
 				deliverMetadataDir = rootCfg.Deliver.MetadataDir
 			}

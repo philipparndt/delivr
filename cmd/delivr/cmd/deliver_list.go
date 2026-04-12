@@ -11,7 +11,8 @@ import (
 
 var deliverListCmd = &cobra.Command{
 	Use:   "list-display-types",
-	Short: "List available display types for the app",
+	Short:        "List available display types for the app",
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if deliverConfigFile == "" {
 			return fmt.Errorf("--config is required")

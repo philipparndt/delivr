@@ -19,7 +19,8 @@ var rotatoDim string
 var rotatoCmd = &cobra.Command{
 	Use:   "rotato",
 	Short: "Generate device templates from .rotato files",
-	Long:  GetHelp("rotato"),
+	Long:         GetHelp("rotato"),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if rotatoInputDir == "" || rotatoOutputDir == "" {
 			return fmt.Errorf("--input and --output are required")

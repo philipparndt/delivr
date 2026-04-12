@@ -17,7 +17,8 @@ var downloadList bool
 var framesDownloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download Apple device bezels from Apple's CDN",
-	Long:  GetHelp("frames-download"),
+	Long:         GetHelp("frames-download"),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if downloadList {
 			fmt.Println("Available devices:")

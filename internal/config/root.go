@@ -138,7 +138,7 @@ func LoadRootConfig(path string) (*RootConfig, error) {
 }
 
 // ToGenerateConfig converts a RootConfig into a Config suitable for the generate command.
-func (r *RootConfig) ToGenerateConfig() *Config {
+func (r *RootConfig) ToGenerateConfig() (*Config, error) {
 	cfg := &Config{
 		Settings: r.Settings,
 		Devices:  make(map[string]Device),
@@ -166,5 +166,10 @@ func (r *RootConfig) ToGenerateConfig() *Config {
 		}
 	}
 
-	return cfg
+	// Apply templates to screens (merge template properties into screen configs)
+	if err := applyTemplates(cfg); err != nil {
+		return nil, fmt.Errorf("failed to apply templates: %w", err)
+	}
+
+	return cfg, nil
 }

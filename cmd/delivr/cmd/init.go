@@ -33,7 +33,8 @@ var knownDevices = []deviceOption{
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a delivr project with example configs",
-	Long:  GetHelp("init"),
+	Long:         GetHelp("init"),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runInit()
 	},

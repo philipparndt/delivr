@@ -347,10 +347,17 @@ func scaleImage(img image.Image, targetWidth, targetHeight int) image.Image {
 	return imaging.Resize(img, newW, newH, imaging.Lanczos)
 }
 
-// FindRotatoFiles finds all .rotato files in a directory
+// FindRotatoFiles finds all .rotato files in a directory.
+// Resolves symlinks on the input directory so symlinked dirs work.
 func FindRotatoFiles(dir string) ([]string, error) {
+	// Resolve symlink on the root directory
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, err
+	}
+
 	var files []string
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(resolved, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
