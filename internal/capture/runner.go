@@ -1,12 +1,16 @@
 package capture
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // BuildForTesting runs `xcodebuild build-for-testing` for each platform
@@ -58,22 +62,72 @@ func runBuildForTesting(project, scheme string, destinations []string, verbose b
 
 	cmd := exec.Command("xcodebuild", args...)
 
-	var stderr bytes.Buffer
 	if verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-	} else {
-		cmd.Stderr = &stderr
+		return cmd.Run()
 	}
 
-	if err := cmd.Run(); err != nil {
-		errMsg := stderr.String()
-		if errMsg != "" {
-			lines := strings.Split(strings.TrimSpace(errMsg), "\n")
-			if len(lines) > 10 {
-				lines = lines[len(lines)-10:]
+	// Pipe both stdout and stderr into a single reader to display a
+	// scrolling tail of the last 3 build output lines.
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return fmt.Errorf("failed to create pipe: %w", err)
+	}
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		pr.Close()
+		return fmt.Errorf("failed to start xcodebuild: %w", err)
+	}
+
+	// Close the write end in the parent so the reader gets EOF when the child exits.
+	pw.Close()
+
+	var allLines []string
+	tail := newBuildTail(3)
+
+	// Read output byte-by-byte into lines to avoid any buffering delay
+	// from bufio.Scanner when xcodebuild writes partial lines.
+	var lineBuf []byte
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := pr.Read(buf)
+		if n > 0 {
+			for _, b := range buf[:n] {
+				if b == '\n' {
+					trimmed := strings.TrimSpace(string(lineBuf))
+					if trimmed != "" {
+						allLines = append(allLines, trimmed)
+						tail.push(trimmed)
+					}
+					lineBuf = lineBuf[:0]
+				} else {
+					lineBuf = append(lineBuf, b)
+				}
 			}
-			return fmt.Errorf("build-for-testing failed: %w\n%s", err, strings.Join(lines, "\n"))
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	// Flush remaining partial line
+	if trimmed := strings.TrimSpace(string(lineBuf)); trimmed != "" {
+		allLines = append(allLines, trimmed)
+		tail.push(trimmed)
+	}
+	pr.Close()
+
+	tail.clear()
+
+	if err := cmd.Wait(); err != nil {
+		if len(allLines) > 10 {
+			allLines = allLines[len(allLines)-10:]
+		}
+		if len(allLines) > 0 {
+			return fmt.Errorf("build-for-testing failed: %w\n%s", err, strings.Join(allLines, "\n"))
 		}
 		return fmt.Errorf("build-for-testing failed: %w", err)
 	}
@@ -81,8 +135,81 @@ func runBuildForTesting(project, scheme string, destinations []string, verbose b
 	return nil
 }
 
+// buildTail renders the last N lines of build output in a fixed-height
+// region using ANSI cursor movement, creating a scrolling progress window.
+type buildTail struct {
+	lines    []string
+	maxLines int
+	rendered int // number of lines currently rendered on screen
+	style    lipgloss.Style
+	divStyle lipgloss.Style
+}
+
+func newBuildTail(n int) *buildTail {
+	return &buildTail{
+		maxLines: n,
+		style:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		divStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+	}
+}
+
+func (t *buildTail) push(line string) {
+	t.lines = append(t.lines, line)
+	if len(t.lines) > t.maxLines {
+		t.lines = t.lines[len(t.lines)-t.maxLines:]
+	}
+	t.render()
+}
+
+func (t *buildTail) render() {
+	// Move cursor up to clear previous render
+	if t.rendered > 0 {
+		fmt.Printf("\033[%dA", t.rendered)
+	}
+
+	termWidth := getTerminalWidth()
+	divider := t.divStyle.Render(strings.Repeat("─", termWidth))
+
+	var sb strings.Builder
+
+	// Top divider
+	sb.WriteString(divider)
+	sb.WriteString("\033[K\n")
+
+	// Tail lines (always render maxLines rows for stable height)
+	for i := 0; i < t.maxLines; i++ {
+		if i < len(t.lines) {
+			display := t.lines[i]
+			if len(display) > termWidth-2 {
+				display = display[:termWidth-3] + "…"
+			}
+			sb.WriteString("  ")
+			sb.WriteString(t.style.Render(display))
+		}
+		sb.WriteString("\033[K\n")
+	}
+
+	// Bottom divider
+	sb.WriteString(divider)
+	sb.WriteString("\033[K\n")
+
+	fmt.Print(sb.String())
+	t.rendered = t.maxLines + 2 // lines + 2 dividers
+}
+
+func (t *buildTail) clear() {
+	if t.rendered > 0 {
+		fmt.Printf("\033[%dA", t.rendered)
+		for i := 0; i < t.rendered; i++ {
+			fmt.Print("\033[K\n")
+		}
+		fmt.Printf("\033[%dA", t.rendered)
+	}
+}
+
 // RunTests executes xcodebuild test-without-building for a specific device.
-func RunTests(project, scheme, testTarget, deviceName, platform, udid string, verbose bool) error {
+// If onLine is non-nil, each line of output is passed to it (for progress display).
+func RunTests(project, scheme, testTarget, deviceName, platform, udid string, verbose bool, onLine func(string)) error {
 	var destination string
 	if platform == "macos" {
 		destination = "platform=macOS,arch=arm64"
@@ -104,46 +231,80 @@ func RunTests(project, scheme, testTarget, deviceName, platform, udid string, ve
 
 	cmd := exec.Command("xcodebuild", args...)
 
-	var combined bytes.Buffer
 	if verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-	} else {
-		cmd.Stdout = &combined
-		cmd.Stderr = &combined
-	}
+	} else if onLine != nil {
+		// Stream output line-by-line for progress tracking
+		stdoutPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout pipe: %w", err)
+		}
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stderr pipe: %w", err)
+		}
 
-	if err := cmd.Run(); err != nil {
-		output := combined.String()
-		if output != "" {
-			// Extract the most useful lines — filter out noise
-			var relevant []string
-			for _, line := range strings.Split(output, "\n") {
-				trimmed := strings.TrimSpace(line)
-				if trimmed == "" {
-					continue
+		combined := io.MultiReader(stdoutPipe, stderrPipe)
+
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("failed to start xcodebuild: %w", err)
+		}
+
+		scanner := bufio.NewScanner(combined)
+		var outputLines []string
+		for scanner.Scan() {
+			line := scanner.Text()
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" {
+				outputLines = append(outputLines, trimmed)
+				if !isXcodebuildNoise(trimmed) {
+					onLine(trimmed)
 				}
-				// Skip xcodebuild timestamp noise
-				if strings.Contains(trimmed, "[MT] IDELaunchParametersSnapshot") {
-					continue
-				}
-				if strings.Contains(trimmed, "[MT] IDETestOperationsObserverDebug") {
-					continue
-				}
-				relevant = append(relevant, trimmed)
-			}
-			// Show last 15 relevant lines
-			if len(relevant) > 15 {
-				relevant = relevant[len(relevant)-15:]
-			}
-			if len(relevant) > 0 {
-				return fmt.Errorf("xcodebuild test failed: %w\n%s", err, strings.Join(relevant, "\n"))
 			}
 		}
-		return fmt.Errorf("xcodebuild test failed: %w", err)
+
+		if err := cmd.Wait(); err != nil {
+			return formatTestError(err, outputLines)
+		}
+		return nil
+	} else {
+		var combined bytes.Buffer
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+
+		if err := cmd.Run(); err != nil {
+			return formatTestError(err, strings.Split(combined.String(), "\n"))
+		}
+		return nil
 	}
 
 	return nil
+}
+
+// isXcodebuildNoise returns true for lines that are not useful for progress display.
+func isXcodebuildNoise(line string) bool {
+	return strings.Contains(line, "[MT] IDELaunchParametersSnapshot") ||
+		strings.Contains(line, "[MT] IDETestOperationsObserverDebug")
+}
+
+// formatTestError extracts useful lines from xcodebuild output for the error message.
+func formatTestError(err error, lines []string) error {
+	var relevant []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || isXcodebuildNoise(trimmed) {
+			continue
+		}
+		relevant = append(relevant, trimmed)
+	}
+	if len(relevant) > 15 {
+		relevant = relevant[len(relevant)-15:]
+	}
+	if len(relevant) > 0 {
+		return fmt.Errorf("xcodebuild test failed: %w\n%s", err, strings.Join(relevant, "\n"))
+	}
+	return fmt.Errorf("xcodebuild test failed: %w", err)
 }
 
 // DeviceCategory returns a short category name for organizing screenshots.

@@ -220,7 +220,9 @@ func runIOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, tr
 	// Run tests with screenshot count polling
 	tracker.Update(index, StepRunningTests+" (0 screenshots)")
 	stopPolling := pollScreenshots(helperDir, index, tracker)
-	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "ios", job.UDID, verbose)
+	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "ios", job.UDID, verbose, func(line string) {
+		tracker.SetLastLine(index, line)
+	})
 	stopPolling()
 
 	if testErr != nil {
@@ -271,7 +273,9 @@ func runMacOSJobWithProgress(cfg *Config, job Job, index int, helperDir string, 
 		os.RemoveAll(stale)
 	}
 	stopPolling := pollMacOSScreenshots(home, index, tracker)
-	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "macos", "", verbose)
+	testErr := RunTests(cfg.Project, cfg.Scheme, cfg.TestTarget, job.Device.Name, "macos", "", verbose, func(line string) {
+		tracker.SetLastLine(index, line)
+	})
 	stopPolling()
 
 	if testErr != nil {

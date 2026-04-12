@@ -2,10 +2,13 @@ package capture
 
 import (
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 )
 
 // Step constants for job progress reporting.
@@ -30,6 +33,7 @@ type JobStatus struct {
 	Runtime    string // e.g. "iOS 26.4" or "macOS"
 	Step       string
 	Error      string
+	LastLine   string // last line of xcodebuild output
 }
 
 // ProgressTracker manages and renders job progress for all capture jobs.
@@ -89,6 +93,15 @@ func (p *ProgressTracker) Update(index int, step string) {
 	p.render()
 }
 
+// SetLastLine updates the last xcodebuild output line for a job and re-renders.
+func (p *ProgressTracker) SetLastLine(index int, line string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.jobs[index].LastLine = line
+	p.render()
+}
+
 // Fail marks a job as failed and re-renders.
 func (p *ProgressTracker) Fail(index int, err error) {
 	p.mu.Lock()
@@ -96,6 +109,7 @@ func (p *ProgressTracker) Fail(index int, err error) {
 
 	p.jobs[index].Step = StepFailed
 	p.jobs[index].Error = err.Error()
+	p.jobs[index].LastLine = ""
 	p.render()
 }
 
@@ -186,6 +200,22 @@ func (p *ProgressTracker) render() {
 			styledStep,
 			p.bracketStyle.Render("]"),
 		)
+
+		// Show last xcodebuild output line in gray (only while running),
+		// truncated to fit within the terminal width.
+		if j.LastLine != "" && !isDone && !isFailed && !isPending {
+			termWidth := getTerminalWidth()
+			visibleLen := visibleWidth(line)
+			remaining := termWidth - visibleLen - 2 // 2 for "  " separator
+			if remaining > 10 {
+				lastLine := j.LastLine
+				if len(lastLine) > remaining {
+					lastLine = lastLine[:remaining-1] + "…"
+				}
+				line += "  " + p.pendingStyle.Render(lastLine)
+			}
+		}
+
 		sb.WriteString(line)
 		sb.WriteString("\033[K\n") // clear to end of line
 	}
@@ -198,4 +228,21 @@ func (p *ProgressTracker) render() {
 // Finalize prints the final state without ANSI cursor manipulation.
 func (p *ProgressTracker) Finalize() {
 	// The last render is already in place, just ensure cursor is at the end
+}
+
+// ansiEscape matches ANSI escape sequences (colors, cursor movement, etc.).
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// visibleWidth returns the display width of a string, excluding ANSI escape codes.
+func visibleWidth(s string) int {
+	return len(ansiEscape.ReplaceAllString(s, ""))
+}
+
+// getTerminalWidth returns the current terminal width, defaulting to 80.
+func getTerminalWidth() int {
+	w, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || w <= 0 {
+		return 80
+	}
+	return w
 }
