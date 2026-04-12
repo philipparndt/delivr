@@ -46,6 +46,10 @@ func RunCapture(cfg *Config, verbose bool) error {
 	}
 
 	total := len(jobs)
+	if total == 0 {
+		return fmt.Errorf("no capture jobs: none of the devices in the config have a 'platform' field set (needs 'ios' or 'macos')")
+	}
+
 	headerStyle := lipgloss.NewStyle().Bold(true)
 	fmt.Println(headerStyle.Render(fmt.Sprintf(
 		"Capturing screenshots: %d jobs (%d devices × %d appearances)",
