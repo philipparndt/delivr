@@ -133,3 +133,82 @@ type Output struct {
 	Screens []string `yaml:"screens"`
 	Prefix  string   `yaml:"prefix"`
 }
+
+// VideoConfig drives App Store preview videos: recording them off a simulator,
+// cutting them to Apple's spec, and uploading them.
+//
+// Apple's constraints are tight and unforgiving — 15 to 30 seconds, one of a
+// fixed set of resolutions per device family, H.264 or ProRes — and a preview
+// that misses any of them is rejected after upload rather than before. The
+// per-device Spec below exists so those numbers live in config next to the
+// screenshot sizes, instead of in a shell script.
+type VideoConfig struct {
+	// Output directory for the finished previews.
+	Output string `yaml:"output,omitempty"`
+
+	// Recording: how to get the app into the state worth filming.
+	Record *VideoRecordConfig `yaml:"record,omitempty"`
+
+	// One entry per device family to publish a preview for. Keys match the
+	// device keys in devices.yaml.
+	Devices map[string]VideoDeviceConfig `yaml:"devices,omitempty"`
+}
+
+// VideoRecordConfig describes how to drive the app while filming.
+type VideoRecordConfig struct {
+	// Built .app to install. Supports the same shell-free path expansion as the
+	// rest of the config.
+	App string `yaml:"app,omitempty"`
+	// Xcode project and scheme, if delivr should build before recording.
+	Project string `yaml:"project,omitempty"`
+	Scheme  string `yaml:"scheme,omitempty"`
+
+	// Launch arguments that put the app into its scripted sequence.
+	LaunchArgs []string `yaml:"launch_args,omitempty"`
+
+	// Seconds to record. Should comfortably exceed the sequence so the trim
+	// below has material to cut from.
+	Duration float64 `yaml:"duration,omitempty"`
+
+	// Run the sequence once before recording, discarding the result. The first
+	// run of a scene pays for shader and texture caches, and that hitching is
+	// otherwise the first thing a viewer sees.
+	WarmUp bool `yaml:"warm_up,omitempty"`
+}
+
+// VideoDeviceConfig is the per-device output spec.
+type VideoDeviceConfig struct {
+	// Simulator to record on. Defaults to the devices.yaml entry's name.
+	Simulator string `yaml:"simulator,omitempty"`
+
+	// Built .app for this device, overriding video.record.app. Usually
+	// required rather than optional: a project targeting both iOS and tvOS
+	// builds a separate bundle per platform, so one shared path cannot serve
+	// both.
+	App string `yaml:"app,omitempty"`
+
+	// Final pixel size. Must be one Apple accepts for this device family.
+	Width  int `yaml:"width"`
+	Height int `yaml:"height"`
+
+	// Seconds of finished video. Apple requires 15-30.
+	Duration float64 `yaml:"duration,omitempty"`
+
+	// Where to start the cut. When AutoTrim is set this is measured from the
+	// detected start instead of from the head of the recording.
+	Start float64 `yaml:"start,omitempty"`
+
+	// Find the first frame after the opening black by luminance, and cut from
+	// there. Simulator boot and launch take a variable amount of time, so a
+	// fixed offset drifts between runs and the cut lands somewhere different
+	// every time.
+	AutoTrim bool `yaml:"auto_trim,omitempty"`
+
+	// Poster frame, in seconds from the start of the finished video. Apple
+	// wants a timecode; this is the friendlier form of it.
+	PosterFrame float64 `yaml:"poster_frame,omitempty"`
+
+	// ASC preview type, e.g. "APP_IPHONE_67" or "APP_APPLE_TV". Defaults to the
+	// devices.yaml display_type, which uses the same vocabulary.
+	PreviewType string `yaml:"preview_type,omitempty"`
+}

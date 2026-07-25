@@ -20,6 +20,9 @@ var helpFramesDownload string
 //go:embed help/init.md
 var helpInit string
 
+//go:embed help/video.md
+var helpVideo string
+
 //go:embed help/capture.md
 var helpCapture string
 
@@ -38,6 +41,8 @@ func GetHelp(topic string) string {
 		return renderMarkdown(helpRoot)
 	case "generate":
 		return renderMarkdown(helpGenerate)
+	case "video":
+		return renderMarkdown(helpVideo)
 	case "rotato":
 		return renderMarkdown(helpRotato)
 	case "frames":

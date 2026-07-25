@@ -14,6 +14,7 @@ type RootConfig struct {
 	Devices  map[string]UnifiedDevice `yaml:"devices"`
 	Capture  *CaptureSection         `yaml:"capture,omitempty"`
 	Generate *GenerateSection        `yaml:"generate,omitempty"`
+	Video    *VideoConfig            `yaml:"video,omitempty"`
 	Deliver  *DeliverSection         `yaml:"deliver,omitempty"`
 }
 
@@ -77,13 +78,15 @@ func IsRootConfig(path string) (bool, error) {
 	var probe struct {
 		Capture  *yaml.Node `yaml:"capture"`
 		Generate *yaml.Node `yaml:"generate"`
+		Video    *yaml.Node `yaml:"video"`
 		Deliver  *yaml.Node `yaml:"deliver"`
 	}
 	if err := yaml.Unmarshal(data, &probe); err != nil {
 		return false, err
 	}
 
-	return probe.Capture != nil || probe.Generate != nil || probe.Deliver != nil, nil
+	return probe.Capture != nil || probe.Generate != nil ||
+		probe.Video != nil || probe.Deliver != nil, nil
 }
 
 // LoadRootConfig loads and parses a root delivr.yaml config.
