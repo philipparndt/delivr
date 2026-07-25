@@ -13,6 +13,8 @@ import (
 
 var deliverConfigFile string
 var deliverScreenshotsDir string
+var deliverPreviewsDir string
+var deliverPosterFrame float64
 var deliverMetadataDir string
 var deliverKeyID string
 var deliverIssuerID string
@@ -34,8 +36,8 @@ var localeFileSuffix = map[string]string{
 }
 
 var deliverCmd = &cobra.Command{
-	Use:   "deliver",
-	Short: "Upload metadata and screenshots to App Store Connect",
+	Use:          "deliver",
+	Short:        "Upload metadata and screenshots to App Store Connect",
 	Long:         GetHelp("deliver"),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -65,6 +67,15 @@ var deliverCmd = &cobra.Command{
 			}
 			if rootCfg.Deliver != nil && rootCfg.Deliver.MetadataDir != "" && deliverMetadataDir == "" {
 				deliverMetadataDir = rootCfg.Deliver.MetadataDir
+			}
+			if rootCfg.Deliver != nil && !rootCfg.Deliver.SkipPreviews && deliverPreviewsDir == "" {
+				// Fall back to wherever `delivr video` writes, so previews are
+				// picked up without repeating the path.
+				if rootCfg.Deliver.PreviewsDir != "" {
+					deliverPreviewsDir = rootCfg.Deliver.PreviewsDir
+				} else if rootCfg.Video != nil && rootCfg.Video.Output != "" {
+					deliverPreviewsDir = rootCfg.Video.Output
+				}
 			}
 			if rootCfg.Deliver != nil && rootCfg.Deliver.ScreenshotsDir != "" && deliverScreenshotsDir == "" {
 				deliverScreenshotsDir = rootCfg.Deliver.ScreenshotsDir
@@ -108,6 +119,12 @@ var deliverCmd = &cobra.Command{
 				screenDir = filepath.Join(filepath.Dir(deliverConfigFile), "output", "appstore")
 			}
 			deliverCfg.Screenshots = gatherScreenshots(cfg, screenDir)
+
+			// Previews ride the same flag: both are "the visual assets".
+			if deliverPreviewsDir != "" {
+				deliverCfg.Previews = gatherPreviews(cfg, deliverPreviewsDir)
+				deliverCfg.PreviewPosterFrame = deliverPosterFrame
+			}
 		}
 
 		client, err := asc.NewClient(deliverKeyID, deliverIssuerID, keySource)
@@ -128,6 +145,8 @@ func init() {
 	deliverCmd.PersistentFlags().StringVar(&deliverKeyFile, "key-file", os.Getenv("ASC_KEY_FILE"), "Path to .p8 private key file (or ASC_KEY_FILE env)")
 	deliverCmd.PersistentFlags().StringVar(&deliverKeyPEM, "key-pem", os.Getenv("ASC_KEY_PEM"), "Inline PEM private key content (or ASC_KEY_PEM env)")
 	deliverCmd.Flags().StringVar(&deliverScreenshotsDir, "screenshots", "", "Path to generated screenshots (output/appstore)")
+	deliverCmd.Flags().StringVar(&deliverPreviewsDir, "previews", "", "Path to preview videos (defaults to video.output)")
+	deliverCmd.Flags().Float64Var(&deliverPosterFrame, "poster-frame", 3.0, "Preview poster frame, in seconds")
 	deliverCmd.Flags().StringVar(&deliverMetadataDir, "metadata", "", "Path to metadata files directory (default: config file directory)")
 	deliverCmd.Flags().BoolVar(&deliverSkipMeta, "skip-metadata", false, "Skip metadata upload")
 	deliverCmd.Flags().BoolVar(&deliverSkipScreens, "skip-screenshots", false, "Skip screenshot upload")
@@ -221,6 +240,43 @@ func readTrimmedFile(path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(data)), nil
+}
+
+// gatherPreviews maps locale -> previewType -> video files.
+//
+// Unlike screenshots, previews are not generated per locale: `delivr video`
+// produces one file per device, named for the device key. The same file is
+// offered to every locale, which is what almost every app does — a preview
+// carries no localizable text unless the app burns some in.
+func gatherPreviews(cfg *config.Config, previewsDir string) map[string]map[string][]string {
+	result := make(map[string]map[string][]string)
+	if previewsDir == "" {
+		return result
+	}
+
+	for key, device := range cfg.Devices {
+		if device.DisplayType == "" {
+			continue
+		}
+		var files []string
+		for _, ext := range []string{"mp4", "mov", "m4v"} {
+			matches, err := filepath.Glob(filepath.Join(previewsDir, key+"."+ext))
+			if err == nil {
+				files = append(files, matches...)
+			}
+		}
+		if len(files) == 0 {
+			continue
+		}
+		for _, locale := range cfg.Languages {
+			if result[locale] == nil {
+				result[locale] = make(map[string][]string)
+			}
+			result[locale][device.DisplayType] = append(
+				result[locale][device.DisplayType], files...)
+		}
+	}
+	return result
 }
 
 func gatherScreenshots(cfg *config.Config, screenshotsDir string) map[string]map[string][]string {
