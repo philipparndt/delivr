@@ -265,9 +265,9 @@ generate:
   # translations: !include translations.yaml
   # language_fonts: !include language-fonts.yaml
 
-# deliver:
-#   metadata_dir: ./metadata
-#   screenshots_dir: ./output/appstore
+deliver:
+  metadata_dir: ./metadata
+  screenshots_dir: ./output/appstore
 `
 }
 

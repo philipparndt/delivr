@@ -83,7 +83,7 @@ var deliverCmd = &cobra.Command{
 
 		metaDir := deliverMetadataDir
 		if metaDir == "" {
-			metaDir = filepath.Dir(deliverConfigFile)
+			metaDir = defaultMetadataDir(filepath.Dir(deliverConfigFile))
 		}
 
 		deliverCfg := asc.DeliverConfig{
@@ -134,12 +134,52 @@ func init() {
 	rootCmd.AddCommand(deliverCmd)
 }
 
+// defaultMetadataDir picks the metadata directory when none is configured:
+// the "metadata" subdirectory created by `delivr init` if it exists,
+// otherwise the config file directory (flat layout).
+func defaultMetadataDir(configDir string) string {
+	candidate := filepath.Join(configDir, "metadata")
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		return candidate
+	}
+	return configDir
+}
+
 func loadLocaleMetadata(baseDir, locale string) (*asc.LocaleMetadata, error) {
+	// Try locale subdirectory layout first: {baseDir}/{locale}/description.md
+	localeDir := filepath.Join(baseDir, locale)
+	if meta, err := loadMetadataFromDir(localeDir); err == nil {
+		return meta, nil
+	}
+
+	// Fall back to flat suffix-based layout: {baseDir}/appstore-text[-suffix].md
 	suffix, ok := localeFileSuffix[locale]
 	if !ok {
 		return nil, fmt.Errorf("unknown locale %s", locale)
 	}
+	return loadMetadataFlat(baseDir, suffix)
+}
 
+func loadMetadataFromDir(dir string) (*asc.LocaleMetadata, error) {
+	meta := &asc.LocaleMetadata{}
+
+	if desc, err := readTrimmedFile(filepath.Join(dir, "description.md")); err == nil {
+		meta.Description = desc
+	}
+	if promo, err := readTrimmedFile(filepath.Join(dir, "promotional_text.md")); err == nil {
+		meta.PromotionalText = promo
+	}
+	if news, err := readTrimmedFile(filepath.Join(dir, "release_notes.md")); err == nil {
+		meta.WhatsNew = news
+	}
+
+	if meta.Description == "" && meta.PromotionalText == "" && meta.WhatsNew == "" {
+		return nil, fmt.Errorf("no metadata found")
+	}
+	return meta, nil
+}
+
+func loadMetadataFlat(baseDir, suffix string) (*asc.LocaleMetadata, error) {
 	meta := &asc.LocaleMetadata{}
 
 	descFile := "appstore-text.md"
@@ -172,7 +212,6 @@ func loadLocaleMetadata(baseDir, locale string) (*asc.LocaleMetadata, error) {
 	if meta.Description == "" && meta.PromotionalText == "" && meta.WhatsNew == "" {
 		return nil, fmt.Errorf("no metadata found")
 	}
-
 	return meta, nil
 }
 
