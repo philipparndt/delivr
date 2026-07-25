@@ -29,6 +29,11 @@ type Client struct {
 	key      *ecdsa.PrivateKey
 	http     *http.Client
 	Verbose  bool
+	// DryRun resolves the app, versions and localizations, prints what would be
+	// uploaded, and writes nothing. Worth having because the first delivery to
+	// a real listing is otherwise unrehearsable — and Apple validates assets
+	// asynchronously, so a mistake surfaces long after the command exits.
+	DryRun bool
 }
 
 // NewClient creates a new ASC API client from the given credentials.

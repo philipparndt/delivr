@@ -15,6 +15,7 @@ var deliverConfigFile string
 var deliverScreenshotsDir string
 var deliverPreviewsDir string
 var deliverPosterFrame float64
+var deliverDryRun bool
 var deliverMetadataDir string
 var deliverKeyID string
 var deliverIssuerID string
@@ -132,6 +133,7 @@ var deliverCmd = &cobra.Command{
 			return fmt.Errorf("failed to create API client: %w", err)
 		}
 		client.Verbose = verbose
+		client.DryRun = deliverDryRun
 
 		fmt.Println("Delivering to App Store Connect...")
 		return client.Deliver(deliverCfg)
@@ -147,6 +149,7 @@ func init() {
 	deliverCmd.Flags().StringVar(&deliverScreenshotsDir, "screenshots", "", "Path to generated screenshots (output/appstore)")
 	deliverCmd.Flags().StringVar(&deliverPreviewsDir, "previews", "", "Path to preview videos (defaults to video.output)")
 	deliverCmd.Flags().Float64Var(&deliverPosterFrame, "poster-frame", 3.0, "Preview poster frame, in seconds")
+	deliverCmd.Flags().BoolVar(&deliverDryRun, "dry-run", false, "Resolve everything and print the plan without uploading")
 	deliverCmd.Flags().StringVar(&deliverMetadataDir, "metadata", "", "Path to metadata files directory (default: config file directory)")
 	deliverCmd.Flags().BoolVar(&deliverSkipMeta, "skip-metadata", false, "Skip metadata upload")
 	deliverCmd.Flags().BoolVar(&deliverSkipScreens, "skip-screenshots", false, "Skip screenshot upload")

@@ -38,6 +38,41 @@ func platformForDisplayType(dt string) string {
 	}
 }
 
+// printPlan lists what a delivery would upload, grouped the way it happens.
+func (c *Client) printPlan(cfg DeliverConfig) {
+	for _, locale := range sortedKeys(cfg.Metadata) {
+		meta := cfg.Metadata[locale]
+		var parts []string
+		if meta.Description != "" {
+			parts = append(parts, "description")
+		}
+		if meta.PromotionalText != "" {
+			parts = append(parts, "promo")
+		}
+		if meta.WhatsNew != "" {
+			parts = append(parts, "release notes")
+		}
+		if len(parts) > 0 {
+			fmt.Printf("  %-8s metadata: %s\n", locale, strings.Join(parts, ", "))
+		}
+	}
+	for _, locale := range sortedKeys(cfg.Screenshots) {
+		for _, dt := range sortedKeys(cfg.Screenshots[locale]) {
+			fmt.Printf("  %-8s %-22s %d screenshot(s) -> %s\n",
+				locale, dt, len(cfg.Screenshots[locale][dt]), platformForDisplayType(dt))
+		}
+	}
+	for _, locale := range sortedKeys(cfg.Previews) {
+		for _, pt := range sortedKeys(cfg.Previews[locale]) {
+			for _, f := range cfg.Previews[locale][pt] {
+				fmt.Printf("  %-8s %-22s preview %s -> %s\n",
+					locale, pt, filepath.Base(f), platformForDisplayType(pt))
+			}
+		}
+	}
+	fmt.Println()
+}
+
 func (c *Client) Deliver(cfg DeliverConfig) error {
 	// 1. Find the app
 	appID, err := c.findApp(cfg.BundleID)
@@ -46,6 +81,12 @@ func (c *Client) Deliver(cfg DeliverConfig) error {
 	}
 	fmt.Printf("Found app %s (ID: %s)\n", cfg.BundleID, appID)
 
+	if c.DryRun {
+		fmt.Println("\nDRY RUN — nothing will be written.")
+		c.printPlan(cfg)
+		return nil
+	}
+
 	// 2. Determine which platforms we need (from screenshot display types)
 	platforms := map[string]bool{}
 	if cfg.Screenshots != nil {
@@ -53,6 +94,13 @@ func (c *Client) Deliver(cfg DeliverConfig) error {
 			for dt := range displayTypes {
 				platforms[platformForDisplayType(dt)] = true
 			}
+		}
+	}
+	// Previews decide platforms too: a run delivering only an Apple TV preview
+	// still needs the TV_OS version resolved.
+	for _, previewTypes := range cfg.Previews {
+		for pt := range previewTypes {
+			platforms[platformForDisplayType(pt)] = true
 		}
 	}
 	// Metadata goes to all platforms; if no screenshots, default to both
