@@ -72,6 +72,32 @@ type TextConfig struct {
 	Y        float64 `yaml:"y"`
 	X        float64 `yaml:"x,omitempty"`         // optional X offset from aligned position
 	MaxWidth float64 `yaml:"max_width,omitempty"` // max width for word wrapping (0 = no wrap)
+
+	// Backdrop darkens what is behind the text so it stays legible over busy
+	// imagery. Without it, copy laid over a full-bleed screenshot competes with
+	// whatever happens to be underneath — a bright sprite behind one word is
+	// enough to make a headline unreadable.
+	Backdrop *TextBackdrop `yaml:"backdrop,omitempty"`
+}
+
+// TextBackdrop is drawn behind a text block for contrast.
+type TextBackdrop struct {
+	// "scrim" (default) fades from Color at the nearest edge to transparent,
+	// which keeps a full-bleed image looking full-bleed. "panel" draws a
+	// rounded box tight around the text instead.
+	Type string `yaml:"type,omitempty"`
+
+	// Fill colour, alpha included: "#000000B0" is a common scrim.
+	Color string `yaml:"color"`
+
+	// Panel only: space between the text and the box edge, and the corner
+	// radius of that box.
+	Padding float64 `yaml:"padding,omitempty"`
+	Radius  float64 `yaml:"radius,omitempty"`
+
+	// Scrim only: how far the fade reaches from the edge. Defaults to just past
+	// the text block, so the copy always sits in the opaque part.
+	Height float64 `yaml:"height,omitempty"`
 }
 
 // Background defines the background style
