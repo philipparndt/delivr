@@ -10,12 +10,12 @@ import (
 // RootConfig is the unified delivr.yaml configuration that ties together
 // capture, generate, and deliver configs with shared device definitions.
 type RootConfig struct {
-	Settings Settings                `yaml:"settings"`
+	Settings Settings                 `yaml:"settings"`
 	Devices  map[string]UnifiedDevice `yaml:"devices"`
-	Capture  *CaptureSection         `yaml:"capture,omitempty"`
-	Generate *GenerateSection        `yaml:"generate,omitempty"`
-	Video    *VideoConfig            `yaml:"video,omitempty"`
-	Deliver  *DeliverSection         `yaml:"deliver,omitempty"`
+	Capture  *CaptureSection          `yaml:"capture,omitempty"`
+	Generate *GenerateSection         `yaml:"generate,omitempty"`
+	Video    *VideoConfig             `yaml:"video,omitempty"`
+	Deliver  *DeliverSection          `yaml:"deliver,omitempty"`
 }
 
 // UnifiedDevice extends the device config with capture-relevant fields.
@@ -23,21 +23,21 @@ type UnifiedDevice struct {
 	Name             string `yaml:"name"`
 	Width            int    `yaml:"width"`
 	Height           int    `yaml:"height"`
-	Platform         string `yaml:"platform,omitempty"`          // "ios" or "macos"
+	Platform         string `yaml:"platform,omitempty"` // "ios" or "macos"
 	ScreenshotPrefix string `yaml:"screenshot_prefix,omitempty"`
 	DisplayType      string `yaml:"display_type,omitempty"`
 }
 
 // CaptureSection defines capture settings in the root config.
 type CaptureSection struct {
-	Project         string            `yaml:"project"`
-	Scheme          string            `yaml:"scheme"`
-	TestTarget      string            `yaml:"test_target"`
-	Output          string            `yaml:"output,omitempty"`
-	Appearances     []string          `yaml:"appearances,omitempty"`
-	StatusBar       StatusBarSection  `yaml:"status_bar,omitempty"`
-	Parallel        bool              `yaml:"parallel,omitempty"`
-	MacOSWindowSize [2]int            `yaml:"macos_window_size,omitempty"` // [width, height]
+	Project         string           `yaml:"project"`
+	Scheme          string           `yaml:"scheme"`
+	TestTarget      string           `yaml:"test_target"`
+	Output          string           `yaml:"output,omitempty"`
+	Appearances     []string         `yaml:"appearances,omitempty"`
+	StatusBar       StatusBarSection `yaml:"status_bar,omitempty"`
+	Parallel        bool             `yaml:"parallel,omitempty"`
+	MacOSWindowSize [2]int           `yaml:"macos_window_size,omitempty"` // [width, height]
 }
 
 // StatusBarSection mirrors capture.StatusBarConfig for the root config.
@@ -51,20 +51,24 @@ type StatusBarSection struct {
 
 // GenerateSection defines generate settings in the root config.
 type GenerateSection struct {
-	ScreenshotsDir string                                    `yaml:"screenshots_dir,omitempty"`
-	Output         string                                    `yaml:"output,omitempty"`
-	Templates      map[string]ScreenTemplate                 `yaml:"templates,omitempty"`
-	Screens        []Screen                                  `yaml:"screens"`
-	Outputs        []Output                                  `yaml:"outputs"`
-	Languages      []string                                  `yaml:"languages,omitempty"`
-	Translations   map[string]map[string]ScreenTranslation   `yaml:"translations,omitempty"`
-	LanguageFonts  map[string]LanguageFontConfig              `yaml:"language_fonts,omitempty"`
+	ScreenshotsDir string                                  `yaml:"screenshots_dir,omitempty"`
+	Output         string                                  `yaml:"output,omitempty"`
+	Templates      map[string]ScreenTemplate               `yaml:"templates,omitempty"`
+	Screens        []Screen                                `yaml:"screens"`
+	Outputs        []Output                                `yaml:"outputs"`
+	Languages      []string                                `yaml:"languages,omitempty"`
+	Translations   map[string]map[string]ScreenTranslation `yaml:"translations,omitempty"`
+	LanguageFonts  map[string]LanguageFontConfig           `yaml:"language_fonts,omitempty"`
 }
 
 // DeliverSection defines deliver settings in the root config.
 type DeliverSection struct {
 	MetadataDir    string `yaml:"metadata_dir,omitempty"`
 	ScreenshotsDir string `yaml:"screenshots_dir,omitempty"`
+	// Where `delivr video` put the previews. Defaults to video.output.
+	PreviewsDir string `yaml:"previews_dir,omitempty"`
+	// Skip preview upload even when files are present.
+	SkipPreviews bool `yaml:"skip_previews,omitempty"`
 }
 
 // IsRootConfig checks if the given YAML data represents a root config

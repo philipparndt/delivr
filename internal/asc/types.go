@@ -64,9 +64,9 @@ type createScreenshotSet struct {
 }
 
 type createScreenshotSetData struct {
-	Type          string                          `json:"type"`
-	Attributes    createScreenshotSetAttributes   `json:"attributes"`
-	Relationships screenshotSetRelationships      `json:"relationships"`
+	Type          string                        `json:"type"`
+	Attributes    createScreenshotSetAttributes `json:"attributes"`
+	Relationships screenshotSetRelationships    `json:"relationships"`
 }
 
 type createScreenshotSetAttributes struct {
@@ -91,9 +91,9 @@ type createScreenshot struct {
 }
 
 type createScreenshotData struct {
-	Type          string                    `json:"type"`
-	Attributes    createScreenshotAttrs     `json:"attributes"`
-	Relationships screenshotRelationships   `json:"relationships"`
+	Type          string                  `json:"type"`
+	Attributes    createScreenshotAttrs   `json:"attributes"`
+	Relationships screenshotRelationships `json:"relationships"`
 }
 
 type createScreenshotAttrs struct {
@@ -110,8 +110,8 @@ type commitScreenshot struct {
 }
 
 type commitScreenshotData struct {
-	Type       string                 `json:"type"`
-	ID         string                 `json:"id"`
+	Type       string                `json:"type"`
+	ID         string                `json:"id"`
 	Attributes commitScreenshotAttrs `json:"attributes"`
 }
 
@@ -123,8 +123,16 @@ type commitScreenshotAttrs struct {
 // DeliverConfig holds all data needed for a deliver operation.
 type DeliverConfig struct {
 	BundleID    string
-	Metadata    map[string]*LocaleMetadata            // locale -> metadata
-	Screenshots map[string]map[string][]string         // locale -> displayType -> file paths
+	Metadata    map[string]*LocaleMetadata     // locale -> metadata
+	Screenshots map[string]map[string][]string // locale -> displayType -> file paths
+	// Previews are keyed the same way, by previewType rather than
+	// displayType — the two vocabularies happen to overlap (APP_IPHONE_67,
+	// APP_APPLE_TV), but they are separate fields in the API.
+	Previews map[string]map[string][]string // locale -> previewType -> file paths
+	// Poster frame for every uploaded preview, in seconds. One value rather
+	// than per-file: a set of previews for one device shares a shape, and
+	// nobody wants to tune this per locale.
+	PreviewPosterFrame float64
 }
 
 // LocaleMetadata holds the text fields for a single locale.

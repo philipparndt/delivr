@@ -14,11 +14,28 @@ import (
 
 // Deliver uploads metadata and screenshots to App Store Connect.
 // platformForDisplayType returns "IOS" or "MAC_OS" based on the display type.
+// platformForDisplayType maps a screenshot display type or preview type to the
+// App Store Connect platform whose version owns it.
+//
+// This matters because assets attach to an appStoreVersion, and an app with
+// both an iOS and a tvOS build has one version per platform. Everything
+// non-desktop used to fall through to IOS, which quietly filed Apple TV
+// screenshots against the iOS version.
 func platformForDisplayType(dt string) string {
-	if dt == "APP_DESKTOP" {
+	switch {
+	case dt == "APP_DESKTOP":
 		return "MAC_OS"
+	case dt == "APP_APPLE_TV":
+		return "TV_OS"
+	case dt == "APP_APPLE_VISION_PRO":
+		return "VISION_OS"
+	case strings.HasPrefix(dt, "APP_WATCH"):
+		// Watch assets belong to the iOS version — watchOS is not a separate
+		// platform in App Store Connect.
+		return "IOS"
+	default:
+		return "IOS"
 	}
-	return "IOS"
 }
 
 func (c *Client) Deliver(cfg DeliverConfig) error {
@@ -135,10 +152,17 @@ func (c *Client) Deliver(cfg DeliverConfig) error {
 					continue
 				}
 
-				// Count total files for this locale
+				// Count total files for this locale. Previews count too, or the
+				// progress bar reaches 100% and then keeps uploading.
 				var totalFiles int
 				for displayType, files := range displayTypes {
 					if platformForDisplayType(displayType) != platform {
+						continue
+					}
+					totalFiles += len(files)
+				}
+				for previewType, files := range cfg.Previews[locale] {
+					if platformForDisplayType(previewType) != platform {
 						continue
 					}
 					totalFiles += len(files)
@@ -170,6 +194,24 @@ func (c *Client) Deliver(cfg DeliverConfig) error {
 						fmt.Println()
 						c.Verbose = wasVerbose
 						return fmt.Errorf("screenshots %s/%s: %w", locale, displayType, err)
+					}
+				}
+
+				// Previews ride the same localization and the same platform
+				// filter. previewType and displayType use the same vocabulary,
+				// so the platform can be derived the same way.
+				for previewType, files := range cfg.Previews[locale] {
+					if platformForDisplayType(previewType) != platform {
+						continue
+					}
+					if err := c.UploadPreviewSet(locID, previewType, files,
+						cfg.PreviewPosterFrame, func() {
+							uploaded++
+							printProgress()
+						}); err != nil {
+						fmt.Println()
+						c.Verbose = wasVerbose
+						return fmt.Errorf("previews %s/%s: %w", locale, previewType, err)
 					}
 				}
 				fmt.Println() // newline after completed locale
