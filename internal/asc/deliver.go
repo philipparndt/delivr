@@ -84,7 +84,6 @@ func (c *Client) Deliver(cfg DeliverConfig) error {
 	if c.DryRun {
 		fmt.Println("\nDRY RUN — nothing will be written.")
 		c.printPlan(cfg)
-		return nil
 	}
 
 	// 2. Determine which platforms we need (from screenshot display types)
@@ -125,6 +124,24 @@ func (c *Client) Deliver(cfg DeliverConfig) error {
 			return fmt.Errorf("get localizations for %s: %w", platform, err)
 		}
 		fmt.Printf("Found %d localizations\n", len(localizations))
+
+		if c.DryRun {
+			// The useful half of a dry run: which locales App Store Connect
+			// actually has somewhere to put. A locale configured here but not
+			// created on the listing is skipped silently during a real run, and
+			// that is exactly the failure worth seeing in advance.
+			for _, locale := range sortedKeys(cfg.Metadata) {
+				shots := len(cfg.Screenshots[locale])
+				vids := len(cfg.Previews[locale])
+				if _, ok := localizations[locale]; ok {
+					fmt.Printf("  %-8s ready (%d screenshot set(s), %d preview set(s))\n",
+						locale, shots, vids)
+				} else {
+					fmt.Printf("  %-8s NOT ON THIS LISTING — would be skipped\n", locale)
+				}
+			}
+			continue
+		}
 
 		// Update metadata
 		if cfg.Metadata != nil {
