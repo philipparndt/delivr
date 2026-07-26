@@ -31,23 +31,7 @@ func RenderText(dc *gg.Context, textCfg *config.TextConfig, fontLoader *fonts.Lo
 		return err
 	}
 
-	// Calculate X position based on alignment
-	var x float64
-	var ax float64 // anchor x (0=left, 0.5=center, 1=right)
-
-	switch textCfg.Align {
-	case "left":
-		x = textCfg.X
-		ax = 0
-	case "right":
-		x = float64(dc.Width()) + textCfg.X
-		ax = 1
-	case "center":
-		fallthrough
-	default:
-		x = float64(dc.Width())/2 + textCfg.X
-		ax = 0.5
-	}
+	x, ax := textAnchor(dc, textCfg)
 
 	// The backdrop goes down first, or it would cover the text it exists to
 	// make readable.
@@ -67,6 +51,85 @@ func RenderText(dc *gg.Context, textCfg *config.TextConfig, fontLoader *fonts.Lo
 	}
 
 	return nil
+}
+
+// textAnchor returns the draw x and the horizontal anchor for a text block.
+func textAnchor(dc *gg.Context, textCfg *config.TextConfig) (x, ax float64) {
+	switch textCfg.Align {
+	case "left":
+		return textCfg.X, 0
+	case "right":
+		return float64(dc.Width()) + textCfg.X, 1
+	case "center":
+		fallthrough
+	default:
+		return float64(dc.Width())/2 + textCfg.X, 0.5
+	}
+}
+
+// AnchorTop and AnchorMiddle name the two vertical anchoring modes a text block
+// can be in. Which one applies is decided by whether max_width is set, and the
+// difference is half the block's height — so adding a max_width to stop a title
+// overflowing also drops it, often straight onto the subtitle.
+const (
+	// AnchorTop: DrawStringWrapped puts y at the TOP of the block.
+	AnchorTop = "top"
+	// AnchorMiddle: DrawStringAnchored centres the block ON y.
+	AnchorMiddle = "middle"
+)
+
+// TextMetrics is where a text block actually lands, measured with the same
+// code that draws it.
+type TextMetrics struct {
+	X0, Y0, X1, Y1 float64 `json:"-"`
+	// Anchor is AnchorTop or AnchorMiddle — which of the two vertical
+	// anchoring rules this block is subject to.
+	Anchor string `json:"anchor"`
+	// Lines is the text as it will break, so a stranded word shows up before
+	// the render does.
+	Lines []string `json:"lines"`
+	// Overflow is set when the block escapes the canvas on any side. Without a
+	// max_width an overlong string does not wrap, it runs off both edges.
+	Overflow bool `json:"overflow"`
+	// Wrapped reports whether max_width is in play at all.
+	Wrapped bool `json:"wrapped"`
+}
+
+// MeasureText reports where a text block will be drawn, without drawing it.
+//
+// It goes through the same textBounds the backdrop uses, so the measurement and
+// the render agree by construction — including the anchoring split above, which
+// is otherwise invisible until two lines of copy collide.
+//
+// The font face is set on dc as a side effect, exactly as RenderText would.
+func MeasureText(dc *gg.Context, textCfg *config.TextConfig, fontLoader *fonts.Loader) (TextMetrics, error) {
+	if textCfg == nil || textCfg.Text == "" {
+		return TextMetrics{}, nil
+	}
+
+	face, err := fontLoader.Load(textCfg.Font, textCfg.Size)
+	if err != nil {
+		return TextMetrics{}, err
+	}
+	dc.SetFontFace(face)
+
+	x, ax := textAnchor(dc, textCfg)
+	x0, y0, x1, y1 := textBounds(dc, textCfg, x, ax)
+
+	m := TextMetrics{
+		X0: x0, Y0: y0, X1: x1, Y1: y1,
+		Anchor:  AnchorMiddle,
+		Wrapped: textCfg.MaxWidth > 0,
+		Lines:   []string{textCfg.Text},
+	}
+	if m.Wrapped {
+		m.Anchor = AnchorTop
+		m.Lines = dc.WordWrap(textCfg.Text, textCfg.MaxWidth)
+	}
+	m.Overflow = x0 < 0 || y0 < 0 ||
+		x1 > float64(dc.Width()) || y1 > float64(dc.Height())
+
+	return m, nil
 }
 
 // textBounds returns the box the text will occupy, in the same coordinates the

@@ -1,0 +1,1857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>delivr edit</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b3038; --ink: #e6e9ef;
+    --dim: #8b93a1; --accent: #4ea1ff; --warn: #ffb454; --bad: #ff6b6b;
+    --crop: #ff5fa2; --body: #4ee39a; --text: #ffd166; --centre: #7aa2ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; height: 100vh; overflow: hidden;
+  }
+  aside {
+    width: 340px; flex: none; background: var(--panel); overflow-y: auto;
+    border-right: 1px solid var(--line); padding: 14px;
+  }
+  /* The row is wider than any window, so it scrolls. */
+  main {
+    flex: 1; position: relative; overflow: auto; padding: 16px;
+  }
+  main::-webkit-scrollbar { height: 11px; width: 11px; }
+  main::-webkit-scrollbar-thumb { background: #39404b; border-radius: 6px; }
+  h1 { font-size: 13px; margin: 0 0 4px; letter-spacing: .04em; text-transform: uppercase; }
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--dim); margin: 18px 0 7px; border-top: 1px solid var(--line);
+    padding-top: 12px;
+  }
+  h2:first-of-type { border-top: 0; }
+  label { display: block; font-size: 11px; color: var(--dim); margin: 7px 0 3px; }
+  select, input[type=text], input[type=number], textarea {
+    width: 100%; background: #101318; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px;
+    font: inherit;
+  }
+  input[type=number] { font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); padding: 0; }
+  textarea { resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+  button {
+    background: #262b34; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 5px; padding: 5px 9px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: #313845; }
+  button.primary { background: #1d4f86; border-color: #2a6cb4; }
+  button.primary:hover { background: #2360a3; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > * { flex: 1; min-width: 0; }
+  .row > .fixed { flex: none; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+  .toggles label {
+    display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ink);
+    font-size: 12px; cursor: pointer; padding: 2px 0;
+  }
+  .toggles input { accent-color: var(--accent); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .note { font-size: 11px; color: var(--dim); margin: 6px 0 0; }
+  .note.warn { color: var(--warn); }
+  .note.bad { color: var(--bad); }
+  .facts {
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+    background: #101318; border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px; margin-top: 8px; white-space: pre-wrap; color: var(--dim);
+  }
+  .facts b { color: var(--ink); font-weight: 600; }
+  .facts .hot { color: var(--warn); }
+  /* The frame is laid out in canvas pixels and scaled as a whole, so every
+     layer and every overlay shares one coordinate system. */
+  #stage { position: relative; margin: 0 auto; }
+  #frame {
+    position: relative; transform-origin: top left; background: #1c1e22;
+    will-change: transform;
+  }
+  /* One card per screenshot, clipping its own layers: a device running off the
+     edge must not appear on the screenshot next door, which is what a canvas
+     of that size does and what the store does. */
+  #frame .card { position: absolute; overflow: hidden; }
+  #frame img {
+    position: absolute; image-rendering: auto; user-select: none; -webkit-user-drag: none;
+  }
+  #ov { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+  /* pointer-events:all, not auto: an unfilled circle is otherwise only
+     clickable on its 2px stroke, which is impossible to hit. */
+  #ov .handle { pointer-events: all; }
+  #ov .handle-move { cursor: move; }
+  #ov rect.handle-move:hover { fill: #4ea1ff33; }
+  #ov .handle-turn { cursor: crosshair; }
+  #ov .handle-bar { pointer-events: stroke; cursor: move; }
+  #stage.grabbing { cursor: grabbing; }
+  #stage.grab { cursor: grab; }
+  #status {
+    position: absolute; top: 8px; right: 12px; font-size: 11px; color: var(--dim);
+    font-variant-numeric: tabular-nums; background: rgba(0,0,0,.5);
+    padding: 3px 8px; border-radius: 4px;
+  }
+  .applyrow {
+    border: 1px solid var(--line); border-radius: 5px; padding: 8px;
+    margin-bottom: 7px; background: #101318;
+  }
+  .applyrow .head {
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; margin-bottom: 6px;
+  }
+  .applyrow .head b { color: var(--accent); }
+  .tgt { margin-top: 5px; }
+  .tgt button { width: 100%; text-align: left; font-size: 11px; }
+  .tgt .why { font-size: 10px; color: var(--dim); padding: 2px 2px 0; }
+  .tgt .blocked { font-size: 10px; color: var(--bad); padding: 2px; }
+  .banner {
+    background: #3a2a12; border: 1px solid #6b4a17; color: var(--warn);
+    padding: 7px 9px; border-radius: 5px; font-size: 11px; margin-bottom: 10px;
+  }
+  code { font-family: ui-monospace, Menlo, monospace; }
+  /* Covers the preview area only; the sidebar stays usable. */
+  #busy {
+    position: fixed; left: 340px; right: 0; top: 0; bottom: 0; z-index: 50;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(20,22,26,.82); backdrop-filter: blur(2px);
+  }
+  #busy .card {
+    text-align: center; color: var(--dim); font-size: 12px; line-height: 1.7;
+  }
+  #busy b { color: var(--ink); display: block; font-size: 13px; }
+  #busy .spin {
+    width: 26px; height: 26px; margin: 0 auto 12px; border-radius: 50%;
+    border: 2px solid #2b3038; border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #offline {
+    position: fixed; left: 50%; top: 18px; transform: translateX(-50%);
+    z-index: 99; max-width: 620px; background: #43181c; color: #ffd9dc;
+    border: 1px solid #8d2b33; border-radius: 7px; padding: 12px 16px;
+    font-size: 12px; line-height: 1.5; box-shadow: 0 10px 40px #0009;
+  }
+</style>
+</head>
+<body>
+<aside>
+  <h1>delivr edit</h1>
+  <div class="note" id="configname"></div>
+  <div id="ro"></div>
+
+  <h2>Output</h2>
+  <div class="row">
+    <select id="output"></select>
+    <select id="lang"></select>
+  </div>
+
+  <h2>Screen</h2>
+  <select id="screen"></select>
+  <div class="note">Click any screenshot to select it. The whole row is live.</div>
+
+  <div class="note" id="tmplinfo"></div>
+
+  <h2>Device</h2>
+  <select id="device"></select>
+  <div class="row" style="margin-top:6px">
+    <select id="addPick"></select>
+    <div class="fixed"><button id="add">Add</button></div>
+  </div>
+  <div class="note" id="addnote"></div>
+  <div class="grid3" style="margin-top:6px">
+    <div><label>x</label><input type="number" id="dx" step="1"></div>
+    <div><label>y</label><input type="number" id="dy" step="1"></div>
+    <div><label>height</label><input type="number" id="dh" step="1"></div>
+  </div>
+  <input type="range" id="dhSlider" min="200" max="5000" step="5" style="margin-top:6px">
+  <div class="note">Drag a device to move it. Arrow keys nudge; Shift for ten.</div>
+
+  <h2>Solve</h2>
+  <div class="row">
+    <button id="centre">Centre it</button>
+    <button id="bleed">Bleed to bottom</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <div><label>body top</label><input type="number" id="fitTop" value="470" step="1"></div>
+    <div><label>bleed past</label><input type="number" id="fitBleed" value="60" step="1"></div>
+    <div class="fixed" style="align-self:end"><button id="fit">Fit</button></div>
+  </div>
+  <div class="facts" id="facts">…</div>
+
+  <h2>Overlays</h2>
+  <div class="toggles" id="toggles"></div>
+
+  <h2>Ruler</h2>
+  <div class="row">
+    <label style="margin:0"><input type="checkbox" id="rulerOn"> show</label>
+    <button id="rulerReset" class="fixed">Reset</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <div><label>angle°</label><input type="number" id="rulerAngle" step="0.1"></div>
+    <div class="fixed" style="align-self:end"><button id="rulerH" title="parallel to the previous segment">∥</button></div>
+    <div class="fixed" style="align-self:end"><button id="rulerV" title="perpendicular to the previous segment">⊥</button></div>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button id="rulerAdd">＋ segment</button>
+    <button id="rulerDel">－ segment</button>
+  </div>
+  <div id="rulerOut"></div>
+
+  <h2>Row</h2>
+  <div class="row">
+    <div><label>carousel gap (px)</label><input type="number" id="seamGap" step="1"></div>
+    <div class="fixed" style="align-self:end"><button id="seamDefault">4%</button></div>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <div><label>zoom</label><input type="range" id="zoom" min="4" max="60" step="1"></div>
+    <div class="fixed" style="align-self:end"><button id="zoomFit">fit</button></div>
+  </div>
+  <div id="seamOut"></div>
+
+  <h2>Copy</h2>
+  <div id="texts"></div>
+
+  <h2>Changes</h2>
+  <div class="row">
+    <button id="undo" title="⌘Z">↶ Undo</button>
+    <button id="redo" title="⇧⌘Z">↷ Redo</button>
+    <span class="fixed note" id="histpos" style="margin:0"></span>
+  </div>
+  <div id="apply"></div>
+  <div class="row" style="margin-top:8px">
+    <button id="save" class="primary">Save to files</button>
+    <button id="discard" class="fixed">Discard</button>
+  </div>
+  <div class="note" id="saveout"></div>
+  <textarea id="yaml" rows="8" readonly style="margin-top:10px"></textarea>
+  <div class="row" style="margin-top:6px">
+    <button id="copy">Copy YAML</button>
+  </div>
+</aside>
+
+<main>
+  <div id="stage" class="grab">
+    <div id="frame"></div>
+    <svg id="ov"></svg>
+  </div>
+  <div id="status"></div>
+</main>
+
+<div id="busy"><div class="card">
+  <div class="spin"></div>
+  <b id="busyText">Rendering…</b>
+  <span id="busyTime"></span>
+</div></div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const $ = id => document.getElementById(id);
+
+// Overlays are DOM, not pixels. The PNG layers stay faithful copies of what
+// `generate` would draw, and toggling a layer costs nothing.
+const LAYERS = [
+  ['crop',    'auto_crop box',  'var(--crop)'],
+  ['body',    'device body',    'var(--body)'],
+  ['centre',  'centre lines',   'var(--centre)'],
+  ['margins', 'margins',        'var(--body)'],
+  ['text',    'text bounds',    'var(--text)'],
+  ['screen',  'screen quad',    'var(--body)'],
+];
+const layerOn = {crop: true, body: true, centre: true, margins: true, text: true, screen: false};
+
+let state = null;      // /api/state
+let last = null;       // most recent preview response
+let sel = {screen: null, output: '', lang: '', device: 0, deviceScreen: null};
+let inFlight = false, queued = false;
+
+// rowReset marks a refresh that replaces the row outright — a different output
+// or language — as opposed to one that re-renders the same screens.
+//
+// The distinction matters because the two feel completely different. A resync
+// after a drag is ~150ms and must not flash anything. Switching to a different
+// store slot is a second or more of frame compositing, and leaving the previous
+// device's screenshots on screen while it happens reads as "the click did
+// nothing" rather than "this is working".
+let rowReset = false;
+
+let busyDelay = null, busyTick = null, busyStart = 0;
+
+function busyOn(message, delay) {
+  busyStart = Date.now();
+  clearTimeout(busyDelay);
+  busyDelay = setTimeout(() => {
+    $('busyText').textContent = message;
+    $('busy').style.display = 'flex';
+    clearInterval(busyTick);
+    busyTick = setInterval(() => {
+      $('busyTime').textContent = ((Date.now() - busyStart) / 1000).toFixed(1) + 's';
+    }, 100);
+  }, delay);
+}
+
+function busyOff() {
+  clearTimeout(busyDelay);
+  clearInterval(busyTick);
+  $('busy').style.display = 'none';
+  $('busyTime').textContent = '';
+}
+let zoom = 0;   // 0 = fit the row's height to the window
+
+// A pending store order per output, until it is saved. The row's order is a
+// layout decision like any other, so it belongs in the same buffer as the
+// positions rather than being written the moment a card is dropped.
+let orderByOutput = {};
+const currentOrder = () => {
+  const out = currentOutput();
+  return (out && orderByOutput[out.device]) || (out ? out.screens : []);
+};
+const orderChanged = () => {
+  const out = currentOutput();
+  if (!out || !orderByOutput[out.device]) return false;
+  return orderByOutput[out.device].join('|') !== out.screens.join('|');
+};
+
+// Edits are per screen. In seam view both halves are live, and aligning a seam
+// almost always means moving the other one.
+let editsByScreen = {};
+const editsFor = id => (editsByScreen[id] ||= {devices: {}});
+const currentEdits = () => editsFor(sel.screen);
+
+// api wraps fetch so the two ways this page loses its server are reported as
+// what they are.
+//
+// A bare fetch rejection surfaces as "Load failed" (Safari) or "Failed to
+// fetch" (Chrome), which says nothing useful and — repeated once per changed
+// field — looks like the save itself is broken. It usually is not: `delivr
+// edit` has stopped, or has been restarted and issued a fresh token that this
+// page does not have.
+async function api(path, body) {
+  let r;
+  try {
+    r = await fetch(path, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Delivr-Token': TOKEN},
+      body: JSON.stringify(body || {}),
+    });
+  } catch {
+    offline('The editor server is not responding. It has stopped, or the ' +
+            'terminal running `delivr edit` was closed.');
+    throw new Error('no connection to the editor');
+  }
+
+  if (r.status === 403) {
+    offline('This page belongs to an earlier `delivr edit` session. The server ' +
+            'issues a new token each time it starts, so this tab can no longer ' +
+            'talk to it — open the URL the running server printed.');
+    throw new Error('stale session');
+  }
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  online();
+  return data;
+}
+
+// offline shows one persistent banner rather than a per-field error, and stops
+// the page from hammering a server that is not there.
+let offlineSince = null;
+function offline(why) {
+  if (offlineSince) return;
+  offlineSince = Date.now();
+  const b = document.createElement('div');
+  b.id = 'offline';
+  b.innerHTML = `<b>Disconnected.</b> ${escapeHTML(why)}<br>
+    Your unsaved changes are still here — they are in this page, not on the
+    server — so reconnecting and saving again will not lose them.
+    <button id="retry" style="margin-top:6px">Retry</button>`;
+  document.body.appendChild(b);
+  $('retry').onclick = () => location.reload();
+}
+
+function online() {
+  if (!offlineSince) return;
+  offlineSince = null;
+  document.getElementById('offline')?.remove();
+}
+
+const n0 = v => (Math.round(v)).toString();
+const n1 = v => (Math.round(v * 10) / 10).toString();
+const round1 = v => Math.round(v * 10) / 10;
+const escapeHTML = s => String(s).replace(/[&<>"]/g,
+  c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+function debounce(fn, ms) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+// ---------------------------------------------------------------- history
+
+let history = [], hp = -1;
+const clone = v => JSON.parse(JSON.stringify(v));
+const snapshot = () => clone({edits: editsByScreen, order: orderByOutput});
+
+function resetHistory() { history = [snapshot()]; hp = 0; paintHistory(); }
+
+function restore(snap) {
+  editsByScreen = clone(snap.edits || {});
+  orderByOutput = clone(snap.order || {});
+  paintScreenList();
+}
+
+// commit records a completed change. Called when an interaction ends — on
+// mouseup, not on mousemove — so one drag is one undo step rather than two
+// hundred.
+function commit() {
+  const now = snapshot();
+  if (hp >= 0 && JSON.stringify(history[hp]) === JSON.stringify(now)) return;
+  history = history.slice(0, hp + 1);
+  history.push(now);
+  hp = history.length - 1;
+  paintHistory();
+}
+
+function undo() {
+  if (hp <= 0) return;
+  restore(history[--hp]);
+  paintHistory(); refresh();
+}
+function redo() {
+  if (hp >= history.length - 1) return;
+  restore(history[++hp]);
+  paintHistory(); refresh();
+}
+function paintHistory() {
+  $('undo').disabled = hp <= 0;
+  $('redo').disabled = hp >= history.length - 1;
+  $('histpos').textContent = history.length > 1 ? `${hp}/${history.length - 1}` : '';
+}
+
+// ---------------------------------------------------------------- bootstrap
+
+async function boot() {
+  state = await api('/api/state');
+  $('configname').textContent = state.config;
+  if (state.readOnly) {
+    $('ro').innerHTML = '<div class="banner">Read-only. Values can be copied, not written.</div>';
+  }
+
+  $('output').innerHTML = state.outputs
+    .map(o => `<option value="${o.device}">${o.device} · ${o.width}×${o.height} · ${
+      o.screens.length} screens</option>`).join('');
+  sel.output = state.outputs[0] ? state.outputs[0].device : '';
+  $('output').value = sel.output;
+  $('lang').innerHTML = state.languages
+    .map(l => `<option value="${l}">${l || 'base'}</option>`).join('');
+
+  $('toggles').innerHTML = LAYERS.map(([k, label, colour]) => `
+    <label><input type="checkbox" data-layer="${k}" ${layerOn[k] ? 'checked' : ''}>
+    <span class="swatch" style="background:${colour}"></span>${label}</label>`).join('');
+  $('toggles').addEventListener('change', e => {
+    layerOn[e.target.dataset.layer] = e.target.checked;
+    draw();
+  });
+
+  paintScreenList();
+  loadRuler();
+  wire();
+  resetHistory();
+  // The first paint is a full cold row, so announce it rather than sitting on
+  // an empty window for a second.
+  rowReset = true;
+  refresh();
+}
+
+// paintScreenList fills the screen picker from the selected output, in the
+// order the store shows them.
+//
+// Listing every screen in the config was wrong: an Apple TV screenshot is not
+// selectable while previewing the iPhone row, and offering it invites picking
+// something that cannot be shown. The output decides which screens exist.
+function paintScreenList() {
+  const out = currentOutput();
+  const ids = currentOrder();
+  void out;
+
+  $('screen').innerHTML = ids
+    .map((id, i) => `<option value="${escapeHTML(id)}">${i + 1}. ${escapeHTML(id)}</option>`)
+    .join('');
+
+  if (!ids.includes(sel.screen)) {
+    sel.screen = ids[0] || '';
+    sel.device = 0;
+  }
+  sel.deviceScreen = sel.screen;
+  $('screen').value = sel.screen;
+}
+
+// selectScreen changes which screenshot the detail panel describes. Every
+// screen stays rendered and editable either way.
+function selectScreen(id) {
+  if (sel.screen === id) return;
+  sel.screen = id;
+  sel.deviceScreen = id;
+  sel.device = 0;
+  $('screen').value = id;
+  paintSidebar();
+  draw();
+}
+
+// setZoom rescales the row in the browser. Nothing is re-rendered: the layers
+// are the same images at a different transform, so this is free and smooth,
+// and the server only needs telling on the next request.
+function setZoom(next, anchorEvent) {
+  if (!last) return;
+  zoom = Math.max(0.04, Math.min(2, next));
+
+  const main = document.querySelector('main');
+  // Keep whatever is under the pointer under the pointer.
+  let ax = 0.5, ay = 0.5;
+  if (anchorEvent) {
+    const r = main.getBoundingClientRect();
+    ax = (anchorEvent.clientX - r.left) / r.width;
+    ay = (anchorEvent.clientY - r.top) / r.height;
+  }
+  const fx = (main.scrollLeft + main.clientWidth * ax) / last.scale;
+  const fy = (main.scrollTop + main.clientHeight * ay) / last.scale;
+
+  last.scale = zoom;
+  paintLayers();
+  draw();
+  $('zoom').value = Math.round(zoom * 100);
+
+  main.scrollLeft = fx * zoom - main.clientWidth * ax;
+  main.scrollTop = fy * zoom - main.clientHeight * ay;
+}
+
+function scrollToCard(id) {
+  const card = (last?.cards || []).find(c => c.screen === id);
+  if (!card) return;
+  const main = document.querySelector('main');
+  main.scrollTo({
+    left: card.x * last.scale - (main.clientWidth - card.w * last.scale) / 2,
+    behavior: 'smooth',
+  });
+}
+
+function currentOutput() {
+  return state.outputs.find(o => o.device === sel.output) || state.outputs[0];
+}
+
+function wire() {
+  $('screen').onchange = () => {
+    selectScreen($('screen').value);
+    scrollToCard(sel.screen);
+  };
+  $('output').onchange = () => {
+    sel.output = $('output').value;
+    // A different slot is a different row, so the selection has to come with it.
+    paintScreenList();
+    rowReset = true;
+    refresh();
+  };
+  $('lang').onchange = () => { sel.lang = $('lang').value; rowReset = true; refresh(); };
+  $('device').onchange = () => {
+    const [scr, i] = $('device').value.split('#');
+    sel.deviceScreen = scr; sel.device = +i;
+    paintSidebar(); draw();
+  };
+  $('add').onclick = addDevice;
+
+  for (const [id, field] of [['dx', 'x'], ['dy', 'y'], ['dh', 'height']]) {
+    $(id).onchange = () => {
+      const v = parseFloat($(id).value);
+      if (!isNaN(v)) setEdit(field, field === 'height' ? Math.round(v) : v);
+    };
+  }
+
+  // The slider is the size control. The wheel is for scrolling the row, which
+  // is what a wheel does everywhere else.
+  const slide = debounce(refresh, 90);
+  $('dhSlider').oninput = () => {
+    const d = dev();
+    if (!d) return;
+    const h = +$('dhSlider').value;
+    $('dh').value = h;
+    deviceEdit(d.index, d.screen).height = h;
+    slide();
+  };
+  $('dhSlider').onchange = commit;
+
+  $('centre').onclick = () => { const d = dev(); if (d) setEdit('x', round1(d.solvedX)); };
+  $('bleed').onclick = () => {
+    const d = dev();
+    if (d) setEdit('y', round1(d.solvedBleed + (parseFloat($('fitBleed').value) || 0)));
+  };
+  $('fit').onclick = doFit;
+
+  $('seamDefault').onclick = () => { $('seamGap').value = ''; refresh(); };
+  $('seamGap').onchange = refresh;
+  $('zoom').oninput = () => setZoom(+$('zoom').value / 100);
+  $('zoomFit').onclick = () => { zoom = 0; refresh(); };
+
+  $('rulerOn').onchange = () => { ruler.on = $('rulerOn').checked; saveRuler(); draw(); };
+  $('rulerReset').onclick = resetRuler;
+  $('rulerAngle').onchange = () => aimSelected(parseFloat($('rulerAngle').value) || 0, false);
+  $('rulerH').onclick = () => aimSelected(0, ruler.sel > 0);
+  $('rulerV').onclick = () => aimSelected(90, ruler.sel > 0);
+  $('rulerAdd').onclick = () => {
+    ruler.pts = addSegment(ruler.pts);
+    ruler.sel = segCount() - 1;
+    ruler.on = true; $('rulerOn').checked = true;
+    saveRuler(); draw();
+  };
+  $('rulerDel').onclick = () => {
+    ruler.pts = removeSegment(ruler.pts);
+    ruler.sel = Math.min(ruler.sel, segCount() - 1);
+    saveRuler(); draw();
+  };
+
+  $('copy').onclick = () => navigator.clipboard.writeText($('yaml').value);
+  $('discard').onclick = () => {
+    editsByScreen = {}; orderByOutput = {};
+    paintScreenList(); commit(); refresh();
+  };
+  $('undo').onclick = undo;
+  $('redo').onclick = redo;
+  $('save').onclick = save;
+
+  dragging();
+}
+
+// deviceEdit reaches the edit buffer for whichever screen owns the selection.
+function deviceEdit(i, screenID) {
+  const e = editsFor(screenID || sel.deviceScreen);
+  e.devices ||= {};
+  return (e.devices[i] ||= {});
+}
+
+function setEdit(field, value) {
+  deviceEdit(sel.device)[field] = value;
+  commit();
+  refresh();
+}
+
+function dev() {
+  return last && last.devices
+    ? last.devices.find(d => d.screen === sel.deviceScreen && d.index === sel.device)
+    : null;
+}
+
+// ------------------------------------------------------------------ preview
+
+function refresh() {
+  if (inFlight) { queued = true; return; }
+  inFlight = true;
+  const main = document.querySelector('main');
+
+  const out = currentOutput();
+  const reset = rowReset;
+  rowReset = false;
+  if (reset) {
+    // Clear it rather than leaving the previous slot's screenshots up: showing
+    // the wrong thing confidently is worse than showing nothing.
+    $('frame').innerHTML = '';
+    $('ov').innerHTML = '';
+    main.scrollLeft = 0;
+  }
+  busyOn(
+    reset ? `Rendering ${out ? out.screens.length : 0} screenshots for ${
+      out ? out.device : ''}…` : 'Rendering…',
+    reset ? 0 : 200);
+
+  const gap = parseFloat($('seamGap').value);
+  api('/api/preview', {
+    screen: sel.screen, output: sel.output, lang: sel.lang,
+    edits: editsByScreen,
+    gap: isNaN(gap) ? -1 : gap,
+    zoom,
+    order: orderChanged() ? currentOrder() : null,
+    maxWidth: Math.max(320, main.clientWidth - 32),
+    maxHeight: Math.max(320, main.clientHeight - 32),
+  }).then(resp => {
+    last = resp;
+    if (!last.devices.some(d => d.screen === sel.deviceScreen && d.index === sel.device)) {
+      const first = last.devices[0];
+      if (first) { sel.deviceScreen = first.screen; sel.device = first.index; }
+    }
+    paintLayers();
+    if (!$('seamGap').value) $('seamGap').value = n0(resp.gap);
+    $('zoom').value = Math.round(resp.scale * 100);
+    $('status').textContent =
+      `${resp.millis}ms · ${resp.cards.length} screens · ${Math.round(resp.scale * 100)}%`;
+    paintSidebar();
+    draw();
+  }).catch(err => {
+    $('status').textContent = err.message;
+    $('facts').innerHTML = `<span class="hot">${escapeHTML(err.message)}</span>`;
+  }).finally(() => {
+    inFlight = false;
+    // Keep it up if another render is already queued behind this one.
+    if (queued) { queued = false; refresh(); } else { busyOff(); }
+  });
+}
+
+// paintLayers stacks the rendered layers at the frame's own scale. Images are
+// keyed by content, so the browser reuses them across every redraw and a drag
+// touches the network not at all.
+function paintLayers() {
+  const frame = $('frame');
+  const [fw, fh] = last.frame;
+  frame.style.width = fw + 'px';
+  frame.style.height = fh + 'px';
+  frame.style.transform = `scale(${last.scale})`;
+
+  const stage = $('stage');
+  stage.style.width = Math.round(fw * last.scale) + 'px';
+  stage.style.height = Math.round(fh * last.scale) + 'px';
+
+  // One clipping card per screenshot, then that screen's layers inside it at
+  // card-relative coordinates.
+  const keep = new Set(last.cards.map(c => c.screen));
+  for (const el of [...frame.children]) {
+    if (!keep.has(el.dataset.screen)) el.remove();
+  }
+
+  for (const card of last.cards) {
+    let box = frame.querySelector(`.card[data-screen="${CSS.escape(card.screen)}"]`);
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'card';
+      box.dataset.screen = card.screen;
+      frame.appendChild(box);
+    }
+    box.style.left = card.x + 'px';
+    box.style.top = card.y + 'px';
+    box.style.width = card.w + 'px';
+    box.style.height = card.h + 'px';
+
+    const mine = last.layers.filter(l => l.screen === card.screen);
+    const wanted = new Set(mine.map(layerID));
+    for (const el of [...box.children]) {
+      if (!wanted.has(el.dataset.id)) el.remove();
+    }
+    for (const [i, l] of mine.entries()) {
+      const id = layerID(l);
+      let el = box.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      if (!el) {
+        el = document.createElement('img');
+        el.dataset.id = id;
+        el.src = `/api/layer?k=${l.key}&t=${TOKEN}`;
+        box.appendChild(el);
+      }
+      el.style.left = (l.x - card.x) + 'px';
+      el.style.top = (l.y - card.y) + 'px';
+      el.style.width = l.w + 'px';
+      el.style.height = l.h + 'px';
+      el.style.zIndex = String(i);
+    }
+  }
+
+  // A strip below the cards for their names. Without it the overlay's viewBox
+  // ends exactly at the card's bottom edge and the caption is clipped in half.
+  const pad = captionStrip();
+  const svg = $('ov');
+  svg.setAttribute('width', Math.round(fw * last.scale));
+  svg.setAttribute('height', Math.round((fh + pad) * last.scale));
+  svg.setAttribute('viewBox', `0 0 ${fw} ${fh + pad}`);
+  stage.style.height = Math.round((fh + pad) * last.scale) + 'px';
+}
+
+// captionStrip is the server's reserved strip, in frame coordinates. The fit
+// scale already leaves room for it, so the caption is never below the fold.
+function captionStrip() {
+  const px = (last && last.captionStrip) || 30;
+  return Math.round(px / (last && last.scale ? last.scale : 1));
+}
+
+const layerID = l => `${l.kind}:${l.screen}:${l.index}:${l.key}`;
+
+function layerFor(screenID, index) {
+  const l = last.layers.find(l => l.kind === 'device' && l.screen === screenID && l.index === index);
+  return l ? $('frame').querySelector(`[data-id="${CSS.escape(layerID(l))}"]`) : null;
+}
+
+// ------------------------------------------------------------------ sidebar
+
+function paintSidebar() {
+  if (!last) return;
+
+  $('device').innerHTML = last.devices.map(d => {
+    const label = `${d.screen} · ${d.index}: ${d.source}`;
+    const value = `${d.screen}#${d.index}`;
+    const on = d.screen === sel.deviceScreen && d.index === sel.device;
+    return `<option value="${escapeHTML(value)}"${on ? ' selected' : ''}>${
+      escapeHTML(label)}${d.added ? ' (new)' : ''}</option>`;
+  }).join('');
+
+  paintTemplateInfo();
+  paintAddPicker();
+
+  const d = dev();
+  if (!d) { $('facts').textContent = 'no device on this screen'; return; }
+
+  $('dx').value = n1(d.x);
+  $('dy').value = n1(d.y);
+  $('dh').value = d.height;
+  $('dhSlider').value = d.height;
+
+  paintFacts(d);
+  paintTexts();
+  paintSeams();
+  $('yaml').value = last.yaml;
+  paintApply();
+}
+
+function paintTemplateInfo() {
+  if (!last.template) {
+    $('tmplinfo').textContent = 'no template — everything on this screen is its own';
+    return;
+  }
+  const others = (last.templateScreens || []).filter(s => s !== sel.screen);
+  $('tmplinfo').innerHTML =
+    `template <b>${escapeHTML(last.template)}</b>` +
+    (others.length
+      ? ` — shared with ${others.length} other screen${others.length > 1 ? 's' : ''}: ` +
+        `<span title="${escapeHTML(others.join(', '))}">${escapeHTML(others.slice(0, 3).join(', '))}` +
+        `${others.length > 3 ? '…' : ''}</span>`
+      : ' — used only here');
+}
+
+function paintAddPicker() {
+  // Only devices from this row: an Apple TV screenshot's device on an iPhone
+  // card is never the answer, and the seam placement below assumes one row.
+  const out = currentOutput();
+  const inRow = new Set(out ? out.screens : []);
+  const candidates = (state.catalog || [])
+    .filter(c => c.screen !== sel.deviceScreen && inRow.has(c.screen));
+  $('addPick').innerHTML = candidates.length
+    ? candidates.map((c, i) =>
+        `<option value="${i}">${escapeHTML(c.screen)} · ${escapeHTML(c.source)}</option>`).join('')
+    : '<option value="">nothing to copy</option>';
+  $('add').disabled = !candidates.length;
+  window._candidates = candidates;
+}
+
+// addDevice copies a device that exists elsewhere onto the selected screen,
+// positioned to continue across the seam when the two screens are neighbours —
+// the only reason to have the same device on two cards.
+function addDevice() {
+  const c = (window._candidates || [])[+$('addPick').value];
+  if (!c) return;
+
+  const target = sel.deviceScreen;
+  const gap = parseFloat($('seamGap').value);
+  const cw = last.canvas[0];
+  const step = cw + (isNaN(gap) ? Math.round(cw * 0.04) : gap);
+
+  const out = currentOutput();
+  const here = out ? out.screens.indexOf(target) : -1;
+  const there = out ? out.screens.indexOf(c.screen) : -1;
+  let x = c.x;
+  let note = 'copied at the same x — the two screens are not adjacent';
+  if (here >= 0 && there >= 0 && Math.abs(here - there) === 1) {
+    x = round1(here > there ? c.x - step : c.x + step);
+    note = `placed to continue from ${c.screen} across the seam`;
+  }
+
+  const e = editsFor(target);
+  e.added ||= [];
+  e.added.push({
+    source: c.source, template: c.template,
+    autoCrop: c.autoCrop, cropThreshold: c.cropThreshold,
+    width: c.width, height: c.height, x, y: c.y,
+  });
+  $('addnote').textContent = note;
+  sel.device = last.devices.filter(d => d.screen === target).length;
+  commit();
+  refresh();
+}
+
+function paintFacts(d) {
+  if (d.error) { $('facts').innerHTML = `<span class="hot">${escapeHTML(d.error)}</span>`; return; }
+
+  const p = d.placement, m = p.margins, s = d.shadow;
+  const off = p.offCentre;
+  const hot = Math.abs(off) > 2 ? ' class="hot"' : '';
+
+  const lines = [
+    `screen    <b>${escapeHTML(d.screen)}</b> device ${d.index}`,
+    `body      <b>${n0(p.body.X1 - p.body.X0)}×${n0(p.body.Y1 - p.body.Y0)}</b> from the ${p.bodySource}`,
+    `off centre<b${hot}>${off >= 0 ? '+' : ''}${n1(off)}px</b>`,
+    `margins   L <b>${n0(m.left)}</b>  R <b>${n0(m.right)}</b>  T <b>${n0(m.top)}</b>  B <b>${n0(m.bottom)}</b>`,
+  ];
+  if (d.autoCrop) {
+    const lop = Math.abs(s.right - s.left) > 8 ? ' class="hot"' : '';
+    lines.push(`shadow    L <b${lop}>${n0(s.left)}</b>  R <b${lop}>${n0(s.right)}</b>  ` +
+               `T <b>${n0(s.top)}</b>  B <b>${n0(s.bottom)}</b>`);
+    lines.push(`y+height  <b>${n0(d.y + d.height)}</b>, body bottom <b>${n0(p.body.Y1)}</b>`);
+  }
+  lines.push(`centre it <b>x: ${n1(d.solvedX)}</b>   bleed 0 <b>y: ${n1(d.solvedBleed)}</b>`);
+  for (const [field, o] of Object.entries(d.origins || {})) {
+    lines.push(`${field.padEnd(9)} from <b>${escapeHTML(o.file)}:${o.line}</b> ` +
+               `(${o.kind}${o.additive && o.kind === 'screen' ? ', added to the template' : ''})`);
+  }
+  $('facts').innerHTML = lines.join('\n');
+}
+
+function paintTexts() {
+  const mine = (last.texts || []).filter(t => t.screen === sel.deviceScreen);
+  const rows = mine.map(t => {
+    const anchored = t.anchor === 'top'
+      ? 'top-anchored, because max_width is set'
+      : 'centred on y, because max_width is not set';
+    const warn = t.overflow ? '<div class="note bad">overflows the canvas</div>' : '';
+    const stranded = t.lines.length > 1 && t.lines[t.lines.length - 1].split(' ').length === 1
+      ? '<div class="note warn">last line is a single word</div>' : '';
+    return `
+      <label>${t.kind}</label>
+      <input type="text" data-text="${t.kind}" value="${escapeHTML(t.text)}">
+      <div class="row" style="margin-top:5px">
+        <div><label>y</label><input type="number" data-tf="${t.kind}:y" value="${n1(t.y)}"></div>
+        <div><label>size</label><input type="number" data-tf="${t.kind}:size" value="${n1(t.size)}"></div>
+        <div><label>max_width</label><input type="number" data-tf="${t.kind}:maxWidth" value="${n1(t.maxWidth)}"></div>
+      </div>
+      <div class="note">${anchored}</div>
+      <div class="note">breaks as: ${t.lines.map(escapeHTML).join(' / ')}</div>
+      ${warn}${stranded}`;
+  });
+  $('texts').innerHTML = rows.join('<hr style="border:0;border-top:1px solid var(--line);margin:10px 0">')
+    || '<div class="note">no copy on this screen</div>';
+
+  const owner = sel.deviceScreen;
+  for (const input of $('texts').querySelectorAll('[data-text]')) {
+    input.oninput = debounce(() => {
+      (editsFor(owner)[input.dataset.text] ||= {}).text = input.value;
+      commit(); refresh();
+    }, 180);
+  }
+  for (const input of $('texts').querySelectorAll('[data-tf]')) {
+    input.onchange = () => {
+      const [kind, field] = input.dataset.tf.split(':');
+      const v = parseFloat(input.value);
+      if (!isNaN(v)) { (editsFor(owner)[kind] ||= {})[field] = v; commit(); refresh(); }
+    };
+  }
+}
+
+// paintSeams reports every boundary in the row that has a device spanning it.
+function paintSeams() {
+  const seams = last.seams || [];
+  if (!seams.length) {
+    $('seamOut').innerHTML =
+      '<div class="note">no device spans a boundary, so there is nothing to line up</div>';
+    return;
+  }
+
+  $('seamOut').innerHTML = seams.map(seam => seam.matches.map(m => {
+    const where = `<code>${escapeHTML(m.neighbourScreen)}</code> → <code>${escapeHTML(m.screen)}</code>`;
+    if (m.continuous) {
+      return `<div class="note">${where}: <b>continuous</b></div>`;
+    }
+    // A device across a seam has to agree on all three. x is the one people
+    // compute; y and height are the ones that quietly differ.
+    const bad = [];
+    if (Math.abs(m.error) > 0.5) {
+      bad.push(`x off by <b>${n1(m.error)}px</b>
+        <button data-fix="${escapeHTML(m.screen)}|${m.index}|x|${m.solvedX}">set x to ${n1(m.solvedX)}</button>`);
+    }
+    if (Math.abs(m.errorY) > 0.5) {
+      bad.push(`y off by <b>${n1(m.errorY)}px</b> — it must be identical
+        <button data-fix="${escapeHTML(m.screen)}|${m.index}|y|${m.neighbourY}">set y to ${n1(m.neighbourY)}</button>`);
+    }
+    if (m.heightDelta !== 0) {
+      bad.push(`height off by <b>${m.heightDelta}</b> — it must be identical
+        <button data-fix="${escapeHTML(m.screen)}|${m.index}|height|${m.neighbourHeight}">set height to ${m.neighbourHeight}</button>`);
+    }
+    return `<div class="note warn">${where} does not continue:<br>${bad.join('<br>')}</div>`;
+  }).join('')).join('');
+
+  for (const b of $('seamOut').querySelectorAll('[data-fix]')) {
+    b.onclick = () => {
+      const [screen, i, field, v] = b.dataset.fix.split('|');
+      deviceEdit(+i, screen)[field] = field === 'height' ? Math.round(+v) : round1(+v);
+      commit(); refresh();
+    };
+  }
+}
+
+async function doFit() {
+  const d = dev();
+  if (!d) return;
+  try {
+    const resp = await api('/api/solve', {
+      screen: d.screen, output: sel.output, device: d.index, edits: editsFor(d.screen),
+      top: parseFloat($('fitTop').value) || 0,
+      bleed: parseFloat($('fitBleed').value) || 0,
+    });
+    const e = deviceEdit(d.index, d.screen);
+    e.height = resp.height;
+    e.y = round1(resp.y);
+    e.x = round1(resp.x);
+    commit();
+    refresh();
+  } catch (err) {
+    $('status').textContent = err.message;
+  }
+}
+
+// -------------------------------------------------------------- write-back
+
+const TEXT_KEYS = {text: 'text', y: 'y', size: 'size', maxWidth: 'max_width'};
+const saveTarget = {};
+const targetKey = c => `${c.screen}:${c.device}:${c.field}`;
+
+// changedFields is what would be written, across both screens in a seam view.
+function changedFields() {
+  const out = [];
+  for (const [screen, e] of Object.entries(editsByScreen)) {
+    const added = (e.added || []).length;
+    const existing = last
+      ? last.devices.filter(d => d.screen === screen).length - added
+      : 0;
+    for (const [i, de] of Object.entries(e.devices || {})) {
+      // A device that is itself an addition is written out whole with the rest
+      // of the new entry, not as a field edit on something that exists.
+      if (+i >= existing) continue;
+      for (const field of ['x', 'y', 'height']) {
+        if (de[field] !== undefined) out.push({screen, device: +i, field, value: de[field]});
+      }
+    }
+    for (const kind of ['title', 'subtitle']) {
+      const te = e[kind];
+      if (!te) continue;
+      for (const [prop, key] of Object.entries(TEXT_KEYS)) {
+        if (te[prop] === undefined) continue;
+        out.push(prop === 'text'
+          ? {screen, device: 0, field: `${kind}.text`, value: 0, text: te[prop]}
+          : {screen, device: 0, field: `${kind}.${key}`, value: te[prop]});
+      }
+    }
+  }
+  return out;
+}
+
+const addedCount = () =>
+  Object.values(editsByScreen).reduce((n, e) => n + (e.added || []).length, 0);
+
+function headLabel(c) {
+  const what = c.text !== undefined ? JSON.stringify(c.text) : n1(c.value);
+  const where = `${c.screen} · `;
+  return c.field.includes('.')
+    ? `${escapeHTML(where)}<b>${escapeHTML(c.field)}</b> = ${escapeHTML(what)}`
+    : `${escapeHTML(where)}device ${c.device} <b>${escapeHTML(c.field)}</b> = ${escapeHTML(what)}`;
+}
+
+function clearEdit(c) {
+  const e = editsByScreen[c.screen];
+  if (!e) return;
+  if (c.field.includes('.')) {
+    const [kind, key] = c.field.split('.');
+    const prop = Object.keys(TEXT_KEYS).find(k => TEXT_KEYS[k] === key);
+    if (e[kind] && prop) delete e[kind][prop];
+  } else if (e.devices?.[c.device]) {
+    delete e.devices[c.device][c.field];
+  }
+}
+
+async function paintApply() {
+  const changed = changedFields();
+  const added = addedCount();
+  $('save').disabled = (!changed.length && !added && !orderChanged()) || state.readOnly;
+
+  const orderNote = orderChanged()
+    ? `<div class="applyrow"><div class="head">screen <b>order</b></div>
+       <div class="why">${escapeHTML(currentOrder().join(' → '))}</div></div>`
+    : '';
+
+  // A new device is a new block, not a changed scalar. Creating it, or turning
+  // `device:` into `devices:`, is a structural rewrite the editor will not
+  // attempt — it would have to guess where the block goes among the comments
+  // that describe it.
+  const addNote = added
+    ? `<div class="note warn">${added} new device${added > 1 ? 's' : ''} — added devices are
+       not written automatically. Copy the YAML below into the screen.</div>`
+    : '';
+
+  if (!changed.length) {
+    $('apply').innerHTML = orderNote + addNote ||
+      '<div class="note">nothing changed yet</div>';
+    return;
+  }
+  if (state.readOnly) {
+    $('apply').innerHTML = addNote + '<div class="note">read-only — copy the YAML below</div>';
+    return;
+  }
+
+  const blocks = await Promise.all(changed.map(async c => {
+    let targets;
+    try {
+      targets = (await api('/api/targets', {
+        screen: c.screen, device: c.device, field: c.field,
+        value: c.value, text: c.text || '', lang: sel.lang,
+      })).targets;
+    } catch (err) {
+      return `<div class="applyrow"><div class="head">${headLabel(c)}</div>
+        <div class="tgt blocked">${escapeHTML(err.message)}</div></div>`;
+    }
+
+    const usable = targets.filter(t => !t.blocked);
+    const key = targetKey(c);
+    if (!usable.some(t => t.kind === saveTarget[key])) {
+      // Default to where the value already resolves from, so saving leaves it
+      // in the file someone already chose to put it in.
+      const owner = last.devices.find(d => d.screen === c.screen && d.index === c.device);
+      const origin = (owner?.origins || {})[c.field]?.kind;
+      saveTarget[key] = usable.some(t => t.kind === origin)
+        ? origin : (usable[0] && usable[0].kind);
+    }
+
+    const options = usable.map(t => {
+      const shown = c.text !== undefined ? JSON.stringify(c.text) : n1(t.write);
+      const where = t.kind === 'template' ? `template ${t.template}`
+                  : t.kind === 'translation' ? `${sel.lang} translation` : c.screen;
+      return `<option value="${t.kind}"${t.kind === saveTarget[key] ? ' selected' : ''}>
+        ${escapeHTML(`${where}: ${c.field} ${shown}`)}</option>`;
+    }).join('');
+
+    const chosen = usable.find(t => t.kind === saveTarget[key]);
+    const why = chosen
+      ? `${chosen.insert ? 'adds to ' + chosen.file : chosen.file + ':' + chosen.line}` +
+        `${chosen.note ? ' — ' + escapeHTML(chosen.note) : ''}`
+      : '';
+    const blocked = targets.filter(t => t.blocked)
+      .map(t => `<div class="blocked">${escapeHTML(t.kind)}: ${escapeHTML(t.blocked)}</div>`)
+      .join('');
+
+    return `<div class="applyrow">
+      <div class="head">${headLabel(c)}</div>
+      ${usable.length ? `<select data-target="${escapeHTML(key)}">${options}</select>` : ''}
+      <div class="why">${why}</div>${blocked}</div>`;
+  }));
+
+  $('apply').innerHTML = orderNote + addNote + blocks.join('');
+  for (const s of $('apply').querySelectorAll('[data-target]')) {
+    s.onchange = () => { saveTarget[s.dataset.target] = s.value; paintApply(); };
+  }
+}
+
+// save writes every pending change, one at a time.
+//
+// Sequentially rather than in parallel: each write reloads the config, and the
+// next one's line numbers and additive deltas are computed against the file as
+// it now stands.
+async function save() {
+  if (state.readOnly) return;
+  const changed = changedFields();
+  if (!changed.length && !orderChanged()) return;
+
+  $('save').disabled = true;
+  const done = [], failed = [];
+
+  if (orderChanged()) {
+    try {
+      const res = await api('/api/reorder',
+        {output: currentOutput().device, screens: currentOrder()});
+      delete orderByOutput[currentOutput().device];
+      done.push(`screen order → ${res.file}`);
+    } catch (err) {
+      failed.push(`screen order: ${err.message}`);
+    }
+  }
+
+  for (const c of changed) {
+    const kind = saveTarget[targetKey(c)];
+    if (!kind) { failed.push(`${c.field}: nowhere to write it`); continue; }
+    try {
+      const res = await api('/api/apply', {
+        screen: c.screen, device: c.device, field: c.field,
+        value: c.value, text: c.text || '', lang: sel.lang, kind,
+      });
+      clearEdit(c);
+      done.push(`${res.field} → ${res.file}${res.added ? ' (added)' : ''}`);
+    } catch (err) {
+      failed.push(`${c.field}: ${err.message}`);
+      // No point trying the rest against a server that is not answering.
+      if (offlineSince) break;
+    }
+  }
+
+  $('saveout').innerHTML =
+    (done.length ? `<div class="note">saved ${done.length}:<br>${done.map(escapeHTML).join('<br>')}</div>` : '') +
+    (failed.length ? `<div class="note bad">${failed.length} not saved:<br>` +
+      `${failed.map(escapeHTML).join('<br>')}` +
+      (offlineSince ? '<br>Nothing was written. Your changes are still here.' : '') +
+      '</div>' : '');
+
+  // Saved values are part of the config now, so the history — which is about
+  // pending edits — starts again. Added devices survive: they were never
+  // written, and dropping them would lose work silently.
+  if (!failed.length) {
+    for (const [screen, e] of Object.entries(editsByScreen)) {
+      editsByScreen[screen] = {devices: {}, added: e.added};
+    }
+  }
+  resetHistory();
+  refresh();
+}
+
+// ----------------------------------------------------------------- overlays
+
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(name, attrs, text) {
+  const e = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// liveOffset is how far the selected device has been dragged since the last
+// authoritative render. Overlays are shifted by it so the numbers track the
+// pointer without waiting for a round trip.
+let liveOffset = {dx: 0, dy: 0};
+
+function draw() {
+  const svg = $('ov');
+  svg.innerHTML = '';
+  if (!last) return;
+
+  const [fw, fh] = last.frame;
+  // One unit = one screen pixel, expressed in frame coordinates. Overlays are
+  // annotation, not artwork: they should be legible at any zoom and never
+  // scale with the row, which is seven canvases wide.
+  const u = 1 / (last.scale || 1);
+  const cw = last.canvas[0], ch = last.canvas[1];
+
+  // Outline every card, and mark the selected one, so it is obvious which
+  // screenshot the panel is describing.
+  for (const [i, card] of (last.cards || []).entries()) {
+    const on = card.screen === sel.screen;
+    svg.appendChild(el('rect', {
+      x: card.x, y: card.y, width: card.w, height: card.h, fill: 'none',
+      stroke: on ? 'var(--accent)' : '#ffffff30',
+      'stroke-width': on ? u * 3 : u,
+    }));
+    // The whole strip under the card is the reorder handle, not just the
+    // glyphs of the name. An SVG <text> is hit-tested on the letterforms
+    // themselves, so grabbing it means hitting a stroke a few pixels wide and
+    // missing lands on the card, which drags the device instead.
+    const strip = captionStrip();
+    const grip = el('rect', {
+      x: card.x, y: card.h, width: card.w, height: strip,
+      fill: on ? '#4ea1ff18' : '#ffffff0a', class: 'handle handle-move',
+    });
+    grip.dataset.caption = card.screen;
+    svg.appendChild(grip);
+
+    const cap = label(svg, card.x + card.w / 2, card.h + 20 * u,
+      `${i + 1}. ${card.screen}`, on ? 'var(--accent)' : '#8b93a1', u, true, 13);
+    cap.setAttribute('class', 'handle handle-move');
+    cap.dataset.caption = card.screen;
+  }
+
+  const d = dev();
+  if (d && !d.error) {
+    // The device's own layers carry the offset already; the placement is in
+    // canvas coordinates, so it needs the screen's offset plus any live drag.
+    const base = screenOffset(d.screen);
+    const ox = base + liveOffset.dx, oy = liveOffset.dy;
+    const p = d.placement;
+
+    if (layerOn.crop && d.autoCrop) {
+      rect(svg, p.content, ox, oy, 'var(--crop)', u * 2, '10,7');
+      label(svg, ox + p.content.X0, clampY(oy + p.content.Y0 - 8 * u, u),
+        'auto_crop box — device + shadow', 'var(--crop)', u);
+    }
+    if (layerOn.body) {
+      rect(svg, p.body, ox, oy, 'var(--body)', u * 2.5, null);
+      // A device bleeding past the bottom would put this off the canvas.
+      label(svg, ox + p.body.X0, clampY(oy + p.body.Y1 + 22 * u, u),
+        `device body (${p.bodySource})`, 'var(--body)', u);
+    }
+    if (layerOn.screen && p.quad) {
+      svg.appendChild(el('polygon', {
+        points: p.quad.map(q => `${ox + q[0]},${oy + q[1]}`).join(' '),
+        fill: 'none', stroke: 'var(--body)', 'stroke-width': u, 'stroke-dasharray': '4,4',
+      }));
+    }
+    if (layerOn.centre) {
+      const canvasMid = base + cw / 2;
+      svg.appendChild(el('line', {x1: canvasMid, y1: 0, x2: canvasMid, y2: ch,
+        stroke: 'var(--centre)', 'stroke-width': u * 1.5, 'stroke-dasharray': '14,10'}));
+      const bodyMid = ox + (p.body.X0 + p.body.X1) / 2;
+      svg.appendChild(el('line', {x1: bodyMid, y1: 0, x2: bodyMid, y2: ch,
+        stroke: 'var(--body)', 'stroke-width': u * 1.5}));
+      const off = bodyMid - canvasMid;
+      if (Math.abs(off) > 1) {
+        const y = ch * 0.62;
+        svg.appendChild(el('line', {x1: bodyMid, y1: y, x2: canvasMid, y2: y,
+          stroke: 'var(--warn)', 'stroke-width': u * 2}));
+        label(svg, (bodyMid + canvasMid) / 2, y - 8 * u,
+          `${n1(off)}px off centre`, 'var(--warn)', u, true);
+      }
+    }
+    if (layerOn.margins) {
+      const midY = oy + (p.body.Y0 + p.body.Y1) / 2;
+      const midX = ox + (p.body.X0 + p.body.X1) / 2;
+      edge(svg, base, midY, ox + p.body.X0, midY, n0(ox + p.body.X0 - base), u);
+      edge(svg, ox + p.body.X1, midY, base + cw, midY, n0(base + cw - (ox + p.body.X1)), u);
+      edge(svg, midX, 0, midX, oy + p.body.Y0, n0(oy + p.body.Y0), u);
+      edge(svg, midX, oy + p.body.Y1, midX, ch, n0(ch - (oy + p.body.Y1)), u);
+    }
+  }
+
+  if (layerOn.text) {
+    for (const t of (last.texts || []).filter(t => t.screen === sel.screen)) {
+      const ox = screenOffset(t.screen);
+      const box = {X0: t.box[0], Y0: t.box[1], X1: t.box[2], Y1: t.box[3]};
+      const colour = t.overflow ? 'var(--bad)' : 'var(--text)';
+      rect(svg, box, ox, 0, colour, u * 1.5, '6,5');
+      // The anchor line is where `y` actually is: the top of a wrapped block,
+      // the middle of an unwrapped one.
+      svg.appendChild(el('line', {
+        x1: ox + box.X0 - 30 * u, y1: t.y, x2: ox + box.X1 + 30 * u, y2: t.y,
+        stroke: colour, 'stroke-width': u,
+      }));
+      // Keep it inside the card rather than spilling onto the next screenshot.
+      const room = ox + last.canvas[0] - 8 * u;
+      const lx = Math.min(ox + box.X1 + 8 * u, room);
+      label(svg, lx, clampY(t.y - 6 * u, u),
+        `${t.kind} y=${n0(t.y)} · ${t.anchor === 'top' ? 'top-anchored (max_width set)' : 'centred on y'}`,
+        colour, u, lx >= room);
+    }
+  }
+
+  if (dropSlot >= 0) {
+    const step = cw + (last.gap || 0);
+    const x = dropSlot * step - (last.gap || 0) / 2;
+    svg.appendChild(el('line', {x1: x, y1: 0, x2: x, y2: fh + captionStrip(),
+      stroke: 'var(--accent)', 'stroke-width': u * 4}));
+  }
+
+  drawRuler(svg, u);
+}
+
+// dropSlot is the gap the dragged screenshot would land in, or -1.
+let dropSlot = -1;
+
+// deviceAt finds the device under a point in frame coordinates, topmost first.
+//
+// Without this, a click anywhere drags whatever the dropdown happens to say,
+// which in seam view means clicking the phone on the other card moves the one
+// on this card. Devices are hit-tested in reverse paint order, against the
+// device body rather than the image — the image includes a drop shadow that
+// reaches hundreds of pixels past anything a person would call the device —
+// and clipped to the owning card, because that is what is actually visible.
+function deviceAt(pt) {
+  if (!last) return null;
+  const devices = (last.layers || []).filter(l => l.kind === 'device');
+  for (let i = devices.length - 1; i >= 0; i--) {
+    const l = devices[i];
+    const d = last.devices.find(x => x.screen === l.screen && x.index === l.index);
+    if (!d || d.error) continue;
+
+    const card = (last.cards || []).find(c => c.screen === l.screen);
+    if (card && (pt.x < card.x || pt.x > card.x + card.w ||
+                 pt.y < card.y || pt.y > card.y + card.h)) continue;
+
+    const ox = card ? card.x : 0;
+    const b = d.placement.body;
+    if (pt.x >= ox + b.X0 && pt.x <= ox + b.X1 && pt.y >= b.Y0 && pt.y <= b.Y1) {
+      return d;
+    }
+  }
+  return null;
+}
+
+// screenOffset is where a screen's canvas starts inside the frame.
+function screenOffset(screenID) {
+  const card = (last.cards || []).find(c => c.screen === screenID);
+  return card ? card.x : 0;
+}
+
+// clampY keeps a label inside the card, since the boxes they annotate routinely
+// extend past it — that is what most of them are pointing out.
+function clampY(y, u) {
+  const fh = last.frame[1];
+  return Math.max(14 * u, Math.min(y, fh - 8 * u));
+}
+
+function rect(svg, r, ox, oy, colour, width, dash) {
+  const attrs = {
+    x: ox + r.X0, y: oy + r.Y0, width: r.X1 - r.X0, height: r.Y1 - r.Y0,
+    fill: 'none', stroke: colour, 'stroke-width': width,
+  };
+  if (dash) attrs['stroke-dasharray'] = dash;
+  svg.appendChild(el('rect', attrs));
+}
+
+function edge(svg, x1, y1, x2, y2, text, u) {
+  svg.appendChild(el('line', {x1, y1, x2, y2,
+    stroke: 'var(--body)', 'stroke-width': u, 'stroke-dasharray': '5,5', opacity: .75}));
+  label(svg, (x1 + x2) / 2, (y1 + y2) / 2 - 6 * u, text + 'px', 'var(--body)', u, true);
+}
+
+function label(svg, x, y, text, colour, u, centred, size) {
+  const px = (size || 12) * u;
+  const t = el('text', {
+    x, y, fill: colour, 'font-size': px,
+    'font-family': 'ui-monospace, Menlo, monospace',
+    'paint-order': 'stroke', stroke: '#000000cc', 'stroke-width': 3 * u,
+  }, text);
+  if (centred) t.setAttribute('text-anchor', 'middle');
+  svg.appendChild(t);
+  return t;
+}
+
+// ------------------------------------------------------------------- ruler
+//
+// A jointed straightedge laid over the whole row, at any angle, spanning every
+// card. Rotated device frames make the alignments that matter diagonal — the
+// edge of a tilted phone continuing into the next screenshot is neither
+// horizontal nor vertical — and no axis-aligned overlay will tell you whether
+// two of them are collinear.
+//
+// Segments chain, and a segment snaps against its PREDECESSOR rather than
+// against the page. That is the difference that makes it useful on tilted art:
+// "perpendicular to that phone's edge" is a question about a 17° reference, and
+// snapping to absolute 90° cannot answer it.
+
+let ruler = {on: false, sel: 0, pts: [{x: 200, y: 600}, {x: 900, y: 1400}]};
+
+const DEG = 180 / Math.PI;
+const segCount = () => ruler.pts.length - 1;
+
+// segAngle is segment i's absolute bearing in degrees.
+function segAngle(pts, i) {
+  if (i < 0 || i + 1 >= pts.length) return 0;
+  return Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x) * DEG;
+}
+function segLength(pts, i) {
+  if (i < 0 || i + 1 >= pts.length) return 0;
+  return Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+}
+// relAngle is how far segment i turns from segment i-1, normalised to ±180.
+function relAngle(pts, i) {
+  if (i <= 0) return NaN;
+  return norm180(segAngle(pts, i) - segAngle(pts, i - 1));
+}
+function norm180(d) {
+  while (d > 180) d -= 360;
+  while (d <= -180) d += 360;
+  return d;
+}
+
+// movePoint moves one joint. Snapping aims the segment that ENDS at the moved
+// point, and does it relative to that segment's predecessor when there is one,
+// so a chain can be built at exact turns from a reference that is itself
+// crooked.
+function movePoint(pts, k, x, y, snap) {
+  const out = pts.map(p => ({...p}));
+  out[k] = {x, y};
+  if (!snap) return out;
+
+  // Which segment is being aimed, and about which joint does it pivot?
+  const seg = k > 0 ? k - 1 : 0;
+  const pivotIndex = k > 0 ? k - 1 : 1;
+  const pivot = pts[pivotIndex];
+
+  const step = 15;
+  const raw = Math.atan2(y - pivot.y, x - pivot.x) * DEG;
+  // Relative to the predecessor if there is one, otherwise to the page.
+  const ref = seg > 0 ? segAngle(pts, seg - 1) : 0;
+  const aimed = k > 0 ? raw : raw + 180;   // dragging point 0 aims backwards
+  const snapped = ref + Math.round(norm180(aimed - ref) / step) * step;
+
+  const len = Math.hypot(x - pivot.x, y - pivot.y);
+  const rad = (k > 0 ? snapped : snapped + 180) / DEG;
+  out[k] = {x: pivot.x + Math.cos(rad) * len, y: pivot.y + Math.sin(rad) * len};
+  return out;
+}
+
+// setSegAngle aims one segment, pivoting about its own start so the joints
+// before it stay where they were put. `relative` measures against the
+// predecessor instead of the page.
+function setSegAngle(pts, i, deg, relative) {
+  if (i < 0 || i + 1 >= pts.length) return pts;
+  const target = relative && i > 0 ? segAngle(pts, i - 1) + deg : deg;
+  const out = pts.map(p => ({...p}));
+  const rad = target / DEG;
+
+  // Rotate this segment and carry the rest of the chain with it, so aiming a
+  // joint does not silently reshape everything downstream.
+  const turn = (target - segAngle(pts, i)) / DEG;
+  const o = pts[i];
+  for (let k = i + 1; k < pts.length; k++) {
+    const dx = pts[k].x - o.x, dy = pts[k].y - o.y;
+    out[k] = {
+      x: o.x + dx * Math.cos(turn) - dy * Math.sin(turn),
+      y: o.y + dx * Math.sin(turn) + dy * Math.cos(turn),
+    };
+  }
+  void rad;
+  return out;
+}
+
+// rulerMoved translates the whole chain: length and every angle invariant,
+// which is what makes it a straightedge you slide along an edge to test it.
+function rulerMoved(pts, mx, my) {
+  return pts.map(p => ({x: p.x + mx, y: p.y + my}));
+}
+
+// addSegment continues straight on, at the same length. Straight because a new
+// segment is a question ("is this bit also at that angle?"), and the answer is
+// clearer when you turn it yourself.
+function addSegment(pts) {
+  const n = pts.length;
+  const a = segAngle(pts, n - 2) / DEG;
+  const len = segLength(pts, n - 2) || 400;
+  const last = pts[n - 1];
+  return [...pts, {x: last.x + Math.cos(a) * len, y: last.y + Math.sin(a) * len}];
+}
+
+function removeSegment(pts) {
+  return pts.length > 2 ? pts.slice(0, -1) : pts;
+}
+
+function loadRuler() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('delivr.ruler') || 'null');
+    if (saved && Array.isArray(saved.pts) && saved.pts.length >= 2) ruler = saved;
+    else if (saved && saved.x1 !== undefined) {
+      // Migrate the single-segment form.
+      ruler = {on: saved.on, sel: 0,
+        pts: [{x: saved.x1, y: saved.y1}, {x: saved.x2, y: saved.y2}]};
+    }
+  } catch { /* a corrupt entry is not worth complaining about */ }
+  ruler.sel = Math.min(ruler.sel || 0, segCount() - 1);
+  $('rulerOn').checked = ruler.on;
+  paintRulerReadout();
+}
+
+function saveRuler() {
+  try { localStorage.setItem('delivr.ruler', JSON.stringify(ruler)); } catch { /* private mode */ }
+  paintRulerReadout();
+}
+
+function resetRuler() {
+  const [fw, fh] = last ? last.frame : [1320, 2868];
+  const w = Math.min(fw, 1320);
+  ruler = {on: true, sel: 0,
+    pts: [{x: w * 0.2, y: fh * 0.35}, {x: w * 0.8, y: fh * 0.65}]};
+  $('rulerOn').checked = true;
+  saveRuler(); draw();
+}
+
+// aimSelected points the selected segment. With a predecessor the angle is
+// read as a turn from it — "90° to that edge", which is the question worth
+// asking when the reference is itself at 17°.
+function aimSelected(deg, relative) {
+  ruler.pts = setSegAngle(ruler.pts, ruler.sel, deg, relative);
+  ruler.on = true; $('rulerOn').checked = true;
+  saveRuler(); draw();
+}
+
+function paintRulerReadout() {
+  const i = ruler.sel;
+  $('rulerAngle').value = n1(segAngle(ruler.pts, i));
+  if (!ruler.on) { $('rulerOut').textContent = ''; return; }
+
+  const rows = ruler.pts.slice(0, -1).map((_, k) => {
+    const rel = relAngle(ruler.pts, k);
+    const relTxt = isNaN(rel) ? '' :
+      `  <b>${rel >= 0 ? '+' : ''}${n1(rel)}°</b> from the one before`;
+    return `<div class="note${k === i ? ' warn' : ''}">seg ${k + 1}: ` +
+      `${n1(segAngle(ruler.pts, k))}° · ${n0(segLength(ruler.pts, k))}px${relTxt}</div>`;
+  });
+  $('rulerOut').innerHTML = rows.join('') +
+    '<div class="note">drag a joint to aim, the bar to move, Shift to snap in 15° ' +
+    'steps relative to the previous segment</div>';
+}
+
+function drawRuler(svg, u) {
+  if (!ruler.on || !last) return;
+  const [fw, fh] = last.frame;
+  const hs = 1 / (last.scale || 1);
+  const pts = ruler.pts;
+
+  // The selected segment gets an infinite extension: a segment tells you about
+  // its endpoints, a line across the row tells you what else lies on it.
+  const i = Math.min(ruler.sel, pts.length - 2);
+  const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
+  const len = Math.hypot(dx, dy) || 1;
+  const far = (fw + fh) * 2;
+  svg.appendChild(el('line', {
+    x1: pts[i].x - dx / len * far, y1: pts[i].y - dy / len * far,
+    x2: pts[i + 1].x + dx / len * far, y2: pts[i + 1].y + dy / len * far,
+    stroke: '#ffffff', 'stroke-width': u * 1.2, 'stroke-dasharray': '12,10', opacity: .45,
+  }));
+
+  for (let k = 0; k + 1 < pts.length; k++) {
+    svg.appendChild(el('line', {
+      x1: pts[k].x, y1: pts[k].y, x2: pts[k + 1].x, y2: pts[k + 1].y,
+      stroke: '#ffffff', 'stroke-width': (k === i ? u * 3 : u * 2),
+      opacity: k === i ? 1 : .7,
+    }));
+    // The bar moves the whole chain, and picks the segment it was grabbed on.
+    const bar = el('line', {
+      x1: pts[k].x, y1: pts[k].y, x2: pts[k + 1].x, y2: pts[k + 1].y,
+      stroke: 'transparent', 'stroke-width': 20 * hs, class: 'handle handle-bar',
+    });
+    bar.dataset.ruler = 'move';
+    bar.dataset.seg = String(k);
+    svg.appendChild(bar);
+
+    const rel = relAngle(pts, k);
+    const mx = (pts[k].x + pts[k + 1].x) / 2, my = (pts[k].y + pts[k + 1].y) / 2;
+    const nx = -(pts[k + 1].y - pts[k].y) / (segLength(pts, k) || 1);
+    const ny = (pts[k + 1].x - pts[k].x) / (segLength(pts, k) || 1);
+    label(svg, mx + nx * 26 * hs, my + ny * 26 * hs,
+      isNaN(rel) ? `${n1(segAngle(pts, k))}°  ${n0(segLength(pts, k))}px`
+                 : `${rel >= 0 ? '+' : ''}${n1(rel)}°  ${n0(segLength(pts, k))}px`,
+      k === i ? '#ffffff' : '#ffffffcc', u, true);
+  }
+
+  // Joints aim the segment that ends at them.
+  for (let k = 0; k < pts.length; k++) {
+    const h = el('circle', {
+      cx: pts[k].x, cy: pts[k].y, r: 9 * hs, fill: '#ffffff', stroke: '#000',
+      'stroke-width': 1.5 * hs, class: 'handle handle-turn',
+    });
+    h.dataset.ruler = 'pt';
+    h.dataset.pt = String(k);
+    svg.appendChild(h);
+  }
+
+  // One move grip, on the first segment.
+  const cx = (pts[0].x + pts[1].x) / 2, cy = (pts[0].y + pts[1].y) / 2;
+  const mid = el('circle', {
+    cx, cy, r: 13 * hs, fill: '#101318', stroke: '#ffffff',
+    'stroke-width': 2 * hs, class: 'handle handle-move',
+  });
+  mid.dataset.ruler = 'move';
+  mid.dataset.seg = '0';
+  svg.appendChild(mid);
+  const arm = 5 * hs;
+  for (const [ax, ay] of [[1, 0], [0, 1]]) {
+    svg.appendChild(el('line', {
+      x1: cx - ax * arm, y1: cy - ay * arm, x2: cx + ax * arm, y2: cy + ay * arm,
+      stroke: '#ffffff', 'stroke-width': 1.5 * hs, 'pointer-events': 'none',
+    }));
+  }
+}
+
+// ----------------------------------------------------------------- dragging
+//
+// Dragging does not re-render. The device's pixels do not change when it moves,
+// so the layer the browser already has is offset in CSS and the overlay numbers
+// are advanced by the same delta. The server is asked for an authoritative
+// render once, on release.
+
+function dragging() {
+  const stage = $('stage');
+  let drag = null;
+
+  // Frame coordinates from a mouse event.
+  function framePoint(e) {
+    const r = $('frame').getBoundingClientRect();
+    return {x: (e.clientX - r.left) / last.scale, y: (e.clientY - r.top) / last.scale};
+  }
+
+  $('ov').addEventListener('mousedown', e => {
+    // Dragging a screenshot's name reorders the row.
+    const caption = e.target.dataset && e.target.dataset.caption;
+    if (caption && last) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectScreen(caption);
+      drag = {what: 'caption', id: caption, from: framePoint(e)};
+      $('stage').classList.add('grabbing');
+      return;
+    }
+
+    const kind = e.target.dataset && e.target.dataset.ruler;
+    if (!kind || !last) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Grabbing a segment also selects it, so the readout and the extension
+    // follow whichever part of the chain is being worked on.
+    if (e.target.dataset.seg !== undefined) ruler.sel = +e.target.dataset.seg;
+    const pt = e.target.dataset.pt !== undefined ? +e.target.dataset.pt : -1;
+    if (pt > 0) ruler.sel = Math.min(pt - 1, segCount() - 1);
+
+    drag = {what: 'ruler', kind, pt, from: framePoint(e),
+            start: ruler.pts.map(p => ({...p}))};
+    paintRulerReadout();
+    draw();
+  });
+
+  stage.addEventListener('mousedown', e => {
+    if (!last || drag) return;
+
+    // Clicking selects: a device if the pointer is on one, otherwise just the
+    // screenshot it landed in. Either way the panel follows the pointer rather
+    // than a dropdown somewhere else.
+    const pt = framePoint(e);
+    const hit = deviceAt(pt);
+    const card = (last.cards || []).find(c =>
+      pt.x >= c.x && pt.x <= c.x + c.w && pt.y >= c.y && pt.y <= c.y + c.h);
+
+    if (card && card.screen !== sel.screen) {
+      sel.screen = card.screen;
+      $('screen').value = card.screen;
+    }
+    if (hit) { sel.deviceScreen = hit.screen; sel.device = hit.index; }
+    else if (card) { sel.deviceScreen = card.screen; sel.device = 0; }
+    paintSidebar();
+    draw();
+
+    const d = hit || dev();
+    if (!d) return;
+
+    e.preventDefault();
+    drag = {what: 'device', from: {x: e.clientX, y: e.clientY}, dx: d.x, dy: d.y,
+            screen: d.screen, index: d.index};
+    stage.classList.add('grabbing');
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!drag || !last) return;
+
+    if (drag.what === 'caption') {
+      // Which gap between cards would it land in?
+      const step = last.canvas[0] + (last.gap || 0);
+      const n = last.cards.length;
+      const slot = Math.max(0, Math.min(n, Math.round(framePoint(e).x / step)));
+      if (slot !== dropSlot) { dropSlot = slot; draw(); }
+      return;
+    }
+
+    if (drag.what === 'ruler') {
+      const p = framePoint(e);
+      const mx = p.x - drag.from.x, my = p.y - drag.from.y;
+      if (drag.kind === 'move') {
+        ruler.pts = rulerMoved(drag.start, mx, my);
+      } else {
+        const k = drag.pt;
+        ruler.pts = movePoint(drag.start, k,
+          drag.start[k].x + mx, drag.start[k].y + my, e.shiftKey);
+      }
+      paintRulerReadout();
+      draw();
+      return;
+    }
+
+    // Move the already-rendered layer. No request, no render, no encode.
+    const k = last.scale;
+    const mx = (e.clientX - drag.from.x) / k, my = (e.clientY - drag.from.y) / k;
+    const img = layerFor(drag.screen, drag.index);
+    if (img) {
+      img.style.transform = `translate(${Math.trunc(mx)}px, ${Math.trunc(my)}px)`;
+    }
+    liveOffset = {dx: Math.trunc(mx), dy: Math.trunc(my)};
+
+    const nx = round1(drag.dx + mx), ny = round1(drag.dy + my);
+    $('dx').value = n1(nx);
+    $('dy').value = n1(ny);
+    draw();
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (!drag) return;
+    const was = drag;
+    drag = null;
+    stage.classList.remove('grabbing');
+
+    if (was.what === 'caption') {
+      const slot = dropSlot;
+      dropSlot = -1;
+      if (slot >= 0) {
+        const out = currentOutput();
+        const ids = currentOrder().slice();
+        const from = ids.indexOf(was.id);
+        if (from >= 0) {
+          ids.splice(from, 1);
+          // Removing the card shifts everything after it left by one.
+          ids.splice(slot > from ? slot - 1 : slot, 0, was.id);
+          orderByOutput[out.device] = ids;
+          paintScreenList();
+          commit();
+          refresh();
+          return;
+        }
+      }
+      draw();
+      return;
+    }
+
+    if (was.what === 'ruler') { saveRuler(); draw(); return; }
+
+    const k = last.scale;
+    const mx = (e.clientX - was.from.x) / k, my = (e.clientY - was.from.y) / k;
+    if (mx || my) {
+      const ed = deviceEdit(was.index, was.screen);
+      ed.x = round1(was.dx + mx);
+      ed.y = round1(was.dy + my);
+      commit();
+    }
+    // Clear the local offset and re-render for real; any disagreement between
+    // the browser's compositing and the renderer's disappears here.
+    liveOffset = {dx: 0, dy: 0};
+    const img = layerFor(was.screen, was.index);
+    if (img) img.style.transform = '';
+    refresh();
+  });
+
+  // The wheel scrolls the row. It used to resize the selected device, which is
+  // not what a wheel does anywhere else and made the row impossible to browse.
+  // Cmd/Ctrl-wheel zooms, as in every other canvas tool.
+  stage.addEventListener('wheel', e => {
+    if (!last || !(e.metaKey || e.ctrlKey)) return;   // otherwise: normal scroll
+    e.preventDefault();
+    setZoom(last.scale * (1 - Math.sign(e.deltaY) * 0.08), e);
+  }, {passive: false});
+
+  window.addEventListener('resize', debounce(refresh, 200));
+
+  const commitNudge = debounce(commit, 400);
+  window.addEventListener('keydown', e => {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === 'z') {
+      e.preventDefault(); e.shiftKey ? redo() : undo(); return;
+    }
+    if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+    if (meta && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
+
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const d = dev();
+    if (!d) return;
+    const step = e.shiftKey ? 10 : 1;
+    const moves = {ArrowLeft: ['x', -step], ArrowRight: ['x', step],
+                   ArrowUp: ['y', -step], ArrowDown: ['y', step]};
+    const move = moves[e.key];
+    if (!move) return;
+    e.preventDefault();
+    const ed = deviceEdit(d.index, d.screen);
+    ed[move[0]] = round1((ed[move[0]] ?? d[move[0]]) + move[1]);
+    moveLocally();
+    commitNudge();
+  });
+}
+
+boot().catch(err => {
+  document.body.innerHTML =
+    `<div style="padding:24px;color:#ff6b6b;font-family:monospace">${err.message}</div>`;
+});
+</script>
+</body>
+</html>

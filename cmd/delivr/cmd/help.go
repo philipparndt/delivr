@@ -8,6 +8,9 @@ var helpRoot string
 //go:embed help/generate.md
 var helpGenerate string
 
+//go:embed help/edit.md
+var helpEdit string
+
 //go:embed help/rotato.md
 var helpRotato string
 
@@ -41,6 +44,8 @@ func GetHelp(topic string) string {
 		return renderMarkdown(helpRoot)
 	case "generate":
 		return renderMarkdown(helpGenerate)
+	case "edit":
+		return renderMarkdown(helpEdit)
 	case "video":
 		return renderMarkdown(helpVideo)
 	case "rotato":

@@ -130,3 +130,56 @@ func writeFile(t *testing.T, dir, name, content string) {
 		t.Fatal(err)
 	}
 }
+
+// Writing a value back means editing the file it actually lives in, which is
+// not the file that included it.
+func TestIncludeTracksTheSourceFile(t *testing.T) {
+	dir := t.TempDir()
+
+	writeFile(t, dir, "templates.yaml", `
+iphone-front:
+  device:
+    x: 170
+`)
+	writeFile(t, dir, "main.yaml", `
+settings:
+  fonts_dir: /Library/Fonts
+templates: !include templates.yaml
+`)
+
+	root, sources, err := LoadNodeWithIncludesFrom(filepath.Join(dir, "main.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	x := findValue(t, root, "templates", "iphone-front", "device", "x")
+	if got, want := sources[x], filepath.Join(dir, "templates.yaml"); got != want {
+		t.Errorf("x came from %q, want %q", got, want)
+	}
+	// And its position is relative to that file, not to the includer.
+	if x.Line != 4 {
+		t.Errorf("x is at line %d of templates.yaml, want 4", x.Line)
+	}
+
+	fonts := findValue(t, root, "settings", "fonts_dir")
+	if got, want := sources[fonts], filepath.Join(dir, "main.yaml"); got != want {
+		t.Errorf("fonts_dir came from %q, want %q", got, want)
+	}
+}
+
+func findValue(t *testing.T, n *yaml.Node, path ...string) *yaml.Node {
+	t.Helper()
+	for _, key := range path {
+		found := false
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			if n.Content[i].Value == key {
+				n, found = n.Content[i+1], true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("key %q not found", key)
+		}
+	}
+	return n
+}

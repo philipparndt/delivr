@@ -259,6 +259,10 @@ func RenderWithFrame(frame, mask *image.NRGBA, meta *FrameMetadata, screenshotPa
 // alphaThreshold is the minimum alpha value (0-255) to consider as content.
 // Use ~10-20 to include soft shadow edges, higher values for tighter cropping.
 func DetectContentBounds(img image.Image, alphaThreshold uint8) image.Rectangle {
+	if nrgba, ok := img.(*image.NRGBA); ok {
+		return detectContentBoundsNRGBA(nrgba, alphaThreshold)
+	}
+
 	bounds := img.Bounds()
 	minX, minY := bounds.Max.X, bounds.Max.Y
 	maxX, maxY := bounds.Min.X, bounds.Min.Y
@@ -293,10 +297,65 @@ func DetectContentBounds(img image.Image, alphaThreshold uint8) image.Rectangle 
 	return image.Rect(minX, minY, maxX+1, maxY+1)
 }
 
-// CropToContent crops an image to its non-transparent content area.
-// alphaThreshold is the minimum alpha value (0-255) to consider as content.
-// padding adds extra pixels around the detected content bounds.
-func CropToContent(img image.Image, alphaThreshold uint8, padding int) image.Image {
+// detectContentBoundsNRGBA is DetectContentBounds over the pixel buffer
+// directly, which is worth doing because this runs over every pixel of an image
+// that can be 13 megapixels: through the image.Image interface it costs about
+// 180ms, and reading the alpha byte costs about 15.
+//
+// The results are identical, not merely similar. At() on an NRGBA returns
+// color.NRGBA, whose RGBA() premultiplies and scales the stored alpha A to
+// A*0x101; the existing code then takes the top byte, and (A*257)>>8 == A for
+// every A in 0..255. So this compares exactly the same number to exactly the
+// same threshold.
+func detectContentBoundsNRGBA(img *image.NRGBA, alphaThreshold uint8) image.Rectangle {
+	bounds := img.Bounds()
+	minX, minY := bounds.Max.X, bounds.Max.Y
+	maxX, maxY := bounds.Min.X, bounds.Min.Y
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		row := img.Pix[(y-bounds.Min.Y)*img.Stride:]
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if row[(x-bounds.Min.X)*4+3] <= alphaThreshold {
+				continue
+			}
+			if x < minX {
+				minX = x
+			}
+			if x > maxX {
+				maxX = x
+			}
+			if y < minY {
+				minY = y
+			}
+			if y > maxY {
+				maxY = y
+			}
+		}
+	}
+
+	if minX > maxX || minY > maxY {
+		return bounds
+	}
+	return image.Rect(minX, minY, maxX+1, maxY+1)
+}
+
+// ScaleImage scales an image to a target size, deriving a zero dimension from
+// the other. Exported so callers that need to defer scaling — to cache the
+// expensive composite that precedes it — scale exactly the way the pipeline
+// does rather than approximately.
+func ScaleImage(img image.Image, targetWidth, targetHeight int) image.Image {
+	return scaleImage(img, targetWidth, targetHeight)
+}
+
+// ContentCropRect returns the rectangle CropToContent will cut: the content
+// bounds grown by padding and clamped to the image.
+//
+// Exported separately because callers that need to know *where* the crop came
+// from — to map a coordinate through it — would otherwise have to guess, and
+// the padding is applied in the coordinates of the image passed in here, which
+// is not the same space as the original source when the image has been scaled
+// first.
+func ContentCropRect(img image.Image, alphaThreshold uint8, padding int) image.Rectangle {
 	contentBounds := DetectContentBounds(img, alphaThreshold)
 
 	// Apply padding
@@ -322,7 +381,14 @@ func CropToContent(img image.Image, alphaThreshold uint8, padding int) image.Ima
 		paddedBounds.Max.Y = imgBounds.Max.Y
 	}
 
-	return imaging.Crop(img, paddedBounds)
+	return paddedBounds
+}
+
+// CropToContent crops an image to its non-transparent content area.
+// alphaThreshold is the minimum alpha value (0-255) to consider as content.
+// padding adds extra pixels around the detected content bounds.
+func CropToContent(img image.Image, alphaThreshold uint8, padding int) image.Image {
+	return imaging.Crop(img, ContentCropRect(img, alphaThreshold, padding))
 }
 
 // scaleImage scales an image maintaining aspect ratio

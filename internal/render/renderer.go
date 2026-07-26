@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,6 +145,116 @@ func (r *Renderer) RenderAll() error {
 	return nil
 }
 
+// DeviceImageLoader produces the image to draw for a device config.
+//
+// It exists so a caller can put a cache in front of PrepareDeviceImage without
+// growing a second copy of the painting order. `generate` passes the plain
+// loader; the editor passes a caching one, so dragging a device does not
+// recomposite a 3840x2160 frame on every mouse move.
+type DeviceImageLoader func(*config.DeviceImage) (image.Image, error)
+
+// BackgroundLoader returns a pre-rendered background for a screen, or nil to
+// have it drawn the usual way.
+//
+// Like DeviceImageLoader, this exists so a caller can cache. Filling a
+// 1320x2868 gradient runs a shader over 3.8 million pixels and costs about
+// 160ms, which is most of the budget for an interactive redraw — and it
+// produces the same pixels every time the background config has not changed.
+type BackgroundLoader func(*config.Background) (image.Image, error)
+
+// PaintScreen paints a screen onto a context: background, then devices back to
+// front, then title, then subtitle. This is the whole definition of what a
+// delivr screenshot is, and everything that renders one goes through here so
+// the editor's preview cannot drift from what `generate` writes.
+func PaintScreen(dc *gg.Context, screen *config.Screen, fontLoader *fonts.Loader, load DeviceImageLoader) error {
+	return PaintScreenWith(dc, screen, fontLoader, load, nil)
+}
+
+// PaintScreenWith is PaintScreen with an optional background cache.
+func PaintScreenWith(dc *gg.Context, screen *config.Screen, fontLoader *fonts.Loader,
+	load DeviceImageLoader, loadBackground BackgroundLoader) error {
+
+	painted := false
+	if loadBackground != nil {
+		bg, err := loadBackground(screen.Background)
+		if err != nil {
+			return fmt.Errorf("background: %w", err)
+		}
+		painted = bg != nil && blitOpaque(dc, bg)
+	}
+	if !painted {
+		if err := RenderBackground(dc, screen.Background); err != nil {
+			return fmt.Errorf("background: %w", err)
+		}
+	}
+
+	if len(screen.Devices) > 0 {
+		// Multiple devices in order (first = back, last = front)
+		for i := range screen.Devices {
+			img, err := load(&screen.Devices[i])
+			if err != nil {
+				return fmt.Errorf("device[%d]: %w", i, err)
+			}
+			DrawDeviceImage(dc, &screen.Devices[i], img)
+		}
+	} else if screen.Device != nil {
+		// Single device mode (backwards compatible)
+		img, err := load(screen.Device)
+		if err != nil {
+			return fmt.Errorf("device: %w", err)
+		}
+		DrawDeviceImage(dc, screen.Device, img)
+	}
+
+	if screen.Title != nil {
+		if err := RenderText(dc, screen.Title, fontLoader); err != nil {
+			return fmt.Errorf("title: %w", err)
+		}
+	}
+
+	if screen.Subtitle != nil {
+		if err := RenderText(dc, screen.Subtitle, fontLoader); err != nil {
+			return fmt.Errorf("subtitle: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// blitOpaque replaces a context's pixels with a pre-rendered image, and reports
+// whether it could.
+//
+// A straight copy rather than DrawImage: the background is the first thing
+// painted and covers the whole canvas, so there is nothing underneath to
+// composite against, and copying is a memmove where compositing is another pass
+// over every pixel. The result is byte-identical to having drawn it here.
+func blitOpaque(dc *gg.Context, src image.Image) bool {
+	dst, ok := dc.Image().(*image.RGBA)
+	if !ok || dst.Bounds() != src.Bounds() {
+		return false
+	}
+	srcRGBA, ok := src.(*image.RGBA)
+	if !ok || srcRGBA.Stride != dst.Stride {
+		return false
+	}
+	copy(dst.Pix, srcRGBA.Pix)
+	return true
+}
+
+// ScreenForLang returns the screen as it renders in a given language, with
+// translations and font overrides applied. Exported so callers that paint a
+// screen themselves localise it the same way RenderAll does.
+func (r *Renderer) ScreenForLang(screen *config.Screen, lang string) *config.Screen {
+	return r.applyTranslation(screen, lang)
+}
+
+// FontLoader exposes the renderer's font cache, so a caller measuring text
+// resolves the same faces the renderer draws with.
+func (r *Renderer) FontLoader() *fonts.Loader { return r.fontLoader }
+
+// Config returns the configuration the renderer was built from.
+func (r *Renderer) Config() *config.Config { return r.cfg }
+
 // applyTranslation returns a screen copy with translated title/subtitle text and font overrides
 func (r *Renderer) applyTranslation(screen *config.Screen, lang string) *config.Screen {
 	if lang == "" {
@@ -216,51 +327,21 @@ func (r *Renderer) renderScreen(device *config.Device, screen *config.Screen, ou
 	// Apply translation if language is set
 	screen = r.applyTranslation(screen, lang)
 
-	// Create drawing context
-	dc := gg.NewContext(device.Width, device.Height)
-
-	// 1. Render background
-	if err := RenderBackground(dc, screen.Background); err != nil {
-		return fmt.Errorf("background: %w", err)
-	}
-
-	// 2. Render device image(s)
 	// Use screenshot_prefix if set, otherwise use device key
 	deviceName := device.ScreenshotPrefix
 	if deviceName == "" {
 		deviceName = output.Device
 	}
 
-	// Check if we have multiple devices or single device
-	if len(screen.Devices) > 0 {
-		// Render multiple devices in order (first = back, last = front)
-		for i := range screen.Devices {
-			if err := RenderDevice(dc, &screen.Devices[i], r.cfg.Settings.ScreenshotsDir, deviceName); err != nil {
-				return fmt.Errorf("device[%d]: %w", i, err)
-			}
-		}
-	} else if screen.Device != nil {
-		// Single device mode (backwards compatible)
-		if err := RenderDevice(dc, screen.Device, r.cfg.Settings.ScreenshotsDir, deviceName); err != nil {
-			return fmt.Errorf("device: %w", err)
-		}
+	dc := gg.NewContext(device.Width, device.Height)
+	load := func(d *config.DeviceImage) (image.Image, error) {
+		return PrepareDeviceImage(d, r.cfg.Settings.ScreenshotsDir, deviceName)
+	}
+	if err := PaintScreen(dc, screen, r.fontLoader, load); err != nil {
+		return err
 	}
 
-	// 3. Render title
-	if screen.Title != nil {
-		if err := RenderText(dc, screen.Title, r.fontLoader); err != nil {
-			return fmt.Errorf("title: %w", err)
-		}
-	}
-
-	// 4. Render subtitle
-	if screen.Subtitle != nil {
-		if err := RenderText(dc, screen.Subtitle, r.fontLoader); err != nil {
-			return fmt.Errorf("subtitle: %w", err)
-		}
-	}
-
-	// 5. Save output (grouped by language/device)
+	// Save output (grouped by language/device)
 	var deviceDir string
 	if lang != "" {
 		deviceDir = filepath.Join(r.outputDir, lang, output.Device)

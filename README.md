@@ -6,6 +6,7 @@ A lightweight App Store screenshot generator and delivery tool — a fastlane al
 
 - Capture screenshots from iOS simulators and macOS with parallel execution
 - Generate professional App Store screenshots with device frames, backgrounds, and text
+- Visual editor (`delivr edit`) with live preview, geometry overlays and solved positioning
 - 3D device mockups via [Rotato](https://rotato.app) integration (macOS)
 - Download and import Apple's official device bezels
 - Upload screenshots and metadata to App Store Connect
@@ -107,6 +108,44 @@ Compose captured screenshots into App Store images with device frames, backgroun
 ```bash
 delivr generate --config delivr.yaml
 ```
+
+### `delivr edit`
+
+Position devices and copy against a live preview, rendered by the same code
+`generate` writes files with.
+
+```bash
+delivr edit --config delivr.yaml
+```
+
+Drag a device to set `x`/`y`, size it with the height slider, and edit the copy in place,
+with ⌘Z/⇧⌘Z to undo and redo. The preview is sent as cached layers, so dragging
+is a CSS offset of the renderer's own pixels rather than a round trip. Overlays show what the numbers do not: the
+`auto_crop` box against the device body (they do not share a centre, which is
+why `x: 0` is not centred), the margin to each canvas edge, and which anchoring
+mode each text block is in. "Centre it", "bleed to bottom" and "fit" solve for
+values instead of nudging them.
+
+The **whole store row** renders at once, in order, with the App Store's
+carousel gap between screenshots (~4% of the width), scrolling horizontally.
+Every screen is live: click any screenshot or device to select it, and drag the
+strip beneath a screenshot to reorder the row. Every
+boundary with a device spanning it is checked on `x`, `y` and `height`, so a
+pair meant to read as one object can be lined up by number instead of by eye.
+
+A **jointed ruler** spans the row at any angle. Segments chain, and Shift snaps
+each one in 15° steps *relative to its predecessor* — which is how you check
+"perpendicular to that phone's edge" when the edge is itself at 17°.
+
+Most geometry lives in a shared template, so the panel names the template
+driving each screen and how many others move with it. **Add** copies a device
+from another screen onto this one, placed at the seam-continuation `x` when the
+two are neighbours.
+
+Nothing is written until you press Save (⌘S), and each value goes to a file you
+choose — the shared template, this screen, or the translation file for
+localised copy — as a single-token edit that leaves comments, blank lines and
+quoting untouched. `--read-only` disables writing entirely.
 
 ### `delivr frames`
 
