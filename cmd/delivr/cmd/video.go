@@ -128,8 +128,12 @@ func runVideo(cfgPath, outputDir, only string, skipRecord, verbose bool) error {
 			}
 		}
 
+		// Per-device soundtrack wins outright, for the same reason as the
+		// bundle above: what each recording shows can differ per platform, and
+		// so can the audio that belongs under it.
 		final := filepath.Join(out, fmt.Sprintf("%s.mp4", key))
-		if err := processor.Process(raw, dev, cfg.Video.Audio, final); err != nil {
+		audio := video.AudioFor(dev, cfg.Video.Audio)
+		if err := processor.Process(raw, dev, audio, final); err != nil {
 			return fmt.Errorf("%s: %w", key, err)
 		}
 	}

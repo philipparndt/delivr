@@ -22,6 +22,12 @@ video:
     launch_args: ["--preview"]
     duration: 36        # film longer than the finished cut needs
     warm_up: true       # discard one run first, so shader hitching is not filmed
+  audio:
+    track: ../myapp/Music/theme.mp3
+    offset: 1.0         # start this far into the track, to match the trim
+    fade_in: 0.4
+    fade_out: 1.5
+    volume: 0.9
   devices:
     iphone:
       duration: 28
@@ -30,6 +36,8 @@ video:
     appletv:
       duration: 28
       auto_trim: true
+      audio:            # replaces video.audio outright for this device
+        track: ../myapp/build/preview-appletv.wav
 ```
 
 Width, height and the simulator name fall back to the matching entry in
@@ -48,5 +56,20 @@ and opening on an empty screen.
 
 **`--skip-record`** re-encodes the raw capture kept under `output/.raw/`, which
 is the fast way to iterate on trim points without filming again.
+
+**`audio`** lays a soundtrack under the cut. Every preview gets an audio track
+whether you configure one or not — App Store Connect rejects a video with no
+audio *stream*, and reports it as "unsupported or corrupted audio", which reads
+like a codec fault rather than an absent track. Without `audio` that stream is
+silence.
+
+`offset` matters more than it looks: `auto_trim` cuts past the app's opening,
+so a track that starts at launch has to skip the same distance or the preview
+opens mid-phrase.
+
+A device-level `audio` block replaces `video.audio` outright rather than
+merging into it. Use it when the audio belongs to what one specific recording
+shows — an app whose sounds follow its own content produces a different
+soundtrack per device, and one shared track then drifts against all but one.
 
 Requires `ffmpeg` on PATH.

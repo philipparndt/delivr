@@ -237,4 +237,12 @@ type VideoDeviceConfig struct {
 	// ASC preview type, e.g. "APP_IPHONE_67" or "APP_APPLE_TV". Defaults to the
 	// devices.yaml display_type, which uses the same vocabulary.
 	PreviewType string `yaml:"preview_type,omitempty"`
+
+	// Soundtrack for this device, replacing video.audio outright (not merged
+	// into it — a half-overridden mix is harder to reason about than a whole
+	// one). Needed whenever the audio is tied to what a specific recording
+	// shows: an app whose sounds follow its own content produces a different
+	// soundtrack per device, and one shared track then drifts against all but
+	// one of them.
+	Audio *VideoAudioConfig `yaml:"audio,omitempty"`
 }

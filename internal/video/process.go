@@ -162,6 +162,20 @@ func requireAudioTrack(path string) error {
 	return nil
 }
 
+// AudioFor picks the soundtrack for one device: its own if it declares one,
+// otherwise the shared video.audio.
+//
+// Replacement rather than merge. A device declares its own track when the audio
+// belongs to what that particular recording shows, and inheriting half the
+// shared block into it — a fade tuned for a different cut, an offset measured
+// against a different trim — is harder to reason about than a whole one.
+func AudioFor(dev config.VideoDeviceConfig, global *config.VideoAudioConfig) *config.VideoAudioConfig {
+	if dev.Audio != nil {
+		return dev.Audio
+	}
+	return global
+}
+
 // audioFilter builds the -af chain: pad short tracks to length, then fade.
 func audioFilter(a *config.VideoAudioConfig, duration float64) string {
 	// apad first — a track shorter than the preview would otherwise end early
