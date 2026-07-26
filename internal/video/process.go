@@ -63,7 +63,14 @@ func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, outPath st
 		"-y", "-loglevel", "error",
 		"-ss", fmt.Sprintf("%.3f", start),
 		"-i", raw,
+		// A silent stereo track, because App Store Connect rejects a preview
+		// with no audio stream at all — and reports it as "unsupported or
+		// corrupted audio", which sounds like a codec problem rather than an
+		// absent track. simctl records no audio, so one is synthesised here.
+		// Do not "optimise" this back to -an.
+		"-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
 		"-t", fmt.Sprintf("%.3f", duration),
+		"-map", "0:v:0", "-map", "1:a:0",
 		"-vf", vf,
 		"-c:v", "libx264",
 		"-profile:v", "high",
@@ -72,8 +79,8 @@ func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, outPath st
 		// Apple re-encodes anyway; a high bitrate here just avoids compounding
 		// artefacts through two passes.
 		"-b:v", "12M", "-maxrate", "16M", "-bufsize", "24M",
+		"-c:a", "aac", "-b:a", "128k", "-ar", "44100",
 		"-movflags", "+faststart",
-		"-an", // previews may carry audio, but simctl records none
 		outPath,
 	}
 	if out, err := exec.Command("ffmpeg", args...).CombinedOutput(); err != nil {
@@ -83,6 +90,11 @@ func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, outPath st
 	info, err := os.Stat(outPath)
 	if err != nil {
 		return fmt.Errorf("ffmpeg produced no output: %w", err)
+	}
+	// Checked rather than assumed: a missing audio track is the one defect
+	// App Store Connect will not tell you about until after an upload.
+	if err := requireAudioTrack(outPath); err != nil {
+		return err
 	}
 	p.logf("%s  %dx%d  %.0fs  %.1f MB", filepath.Base(outPath),
 		even(dev.Width), even(dev.Height), duration, float64(info.Size())/1024/1024)
@@ -117,4 +129,21 @@ func even(n int) int {
 		return n - 1
 	}
 	return n
+}
+
+// requireAudioTrack fails when the encoded preview has no audio stream.
+func requireAudioTrack(path string) error {
+	out, err := exec.Command("ffprobe", "-v", "error",
+		"-select_streams", "a", "-show_entries", "stream=codec_type",
+		"-of", "csv=p=0", path).Output()
+	if err != nil {
+		// ffprobe ships with ffmpeg; if it is somehow absent, do not fail the
+		// encode over a check.
+		return nil
+	}
+	if !strings.Contains(string(out), "audio") {
+		return fmt.Errorf("%s has no audio track — App Store Connect rejects "+
+			"previews without one", filepath.Base(path))
+	}
+	return nil
 }
