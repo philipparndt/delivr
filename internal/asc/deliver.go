@@ -21,19 +21,34 @@ import (
 // both an iOS and a tvOS build has one version per platform. Everything
 // non-desktop used to fall through to IOS, which quietly filed Apple TV
 // screenshots against the iOS version.
+// PreviewTypeFor converts a screenshot display type to the matching preview
+// type.
+//
+// These are two different enums that describe the same devices, and they differ
+// by exactly one prefix: ScreenshotDisplayType is APP_IPHONE_67, PreviewType is
+// IPHONE_67. Sending the screenshot spelling to /appPreviewSets does not return
+// a validation error — App Store Connect answers 500 UNEXPECTED_ERROR, which
+// looks like an outage rather than a bad request.
+func PreviewTypeFor(displayType string) string {
+	return strings.TrimPrefix(displayType, "APP_")
+}
+
+// platformForDisplayType maps a screenshot display type or preview type to the
+// App Store Connect platform whose version owns it.
+//
+// Assets attach to an appStoreVersion, and an app with both an iOS and a tvOS
+// build has one version per platform. Accepts either spelling, since preview
+// types drop the APP_ prefix.
 func platformForDisplayType(dt string) string {
-	switch {
-	case dt == "APP_DESKTOP":
+	switch strings.TrimPrefix(dt, "APP_") {
+	case "DESKTOP":
 		return "MAC_OS"
-	case dt == "APP_APPLE_TV":
+	case "APPLE_TV":
 		return "TV_OS"
-	case dt == "APP_APPLE_VISION_PRO":
+	case "APPLE_VISION_PRO":
 		return "VISION_OS"
-	case strings.HasPrefix(dt, "APP_WATCH"):
-		// Watch assets belong to the iOS version — watchOS is not a separate
-		// platform in App Store Connect.
-		return "IOS"
 	default:
+		// Includes WATCH_*: watchOS is not a separate platform in ASC.
 		return "IOS"
 	}
 }

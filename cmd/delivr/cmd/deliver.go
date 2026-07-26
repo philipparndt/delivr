@@ -275,8 +275,9 @@ func gatherPreviews(cfg *config.Config, previewsDir string) map[string]map[strin
 			if result[locale] == nil {
 				result[locale] = make(map[string][]string)
 			}
-			result[locale][device.DisplayType] = append(
-				result[locale][device.DisplayType], files...)
+			// Keyed by preview type, not display type — the enums differ.
+			pt := asc.PreviewTypeFor(device.DisplayType)
+			result[locale][pt] = append(result[locale][pt], files...)
 		}
 	}
 	return result
