@@ -129,7 +129,7 @@ func runVideo(cfgPath, outputDir, only string, skipRecord, verbose bool) error {
 		}
 
 		final := filepath.Join(out, fmt.Sprintf("%s.mp4", key))
-		if err := processor.Process(raw, dev, final); err != nil {
+		if err := processor.Process(raw, dev, cfg.Video.Audio, final); err != nil {
 			return fmt.Errorf("%s: %w", key, err)
 		}
 	}

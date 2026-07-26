@@ -27,7 +27,7 @@ func (p *Processor) logf(format string, args ...any) {
 var blackEnd = regexp.MustCompile(`black_end:([0-9.]+)`)
 
 // Process trims, scales and encodes `raw` into a preview at Apple's spec.
-func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, outPath string) error {
+func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, audio *config.VideoAudioConfig, outPath string) error {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return fmt.Errorf("ffmpeg is required to cut previews: %w", err)
 	}
@@ -63,14 +63,28 @@ func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, outPath st
 		"-y", "-loglevel", "error",
 		"-ss", fmt.Sprintf("%.3f", start),
 		"-i", raw,
-		// A silent stereo track, because App Store Connect rejects a preview
-		// with no audio stream at all — and reports it as "unsupported or
-		// corrupted audio", which sounds like a codec problem rather than an
-		// absent track. simctl records no audio, so one is synthesised here.
-		// Do not "optimise" this back to -an.
-		"-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+	}
+	// Audio. There is always a track: App Store Connect rejects a preview with
+	// no audio stream at all, and reports it as "unsupported or corrupted
+	// audio" — which reads as a codec fault rather than an absent stream. With
+	// no soundtrack configured that track is silence; with one, it is the music.
+	// Do not "optimise" either back to -an.
+	var afilter string
+	if audio != nil && audio.Track != "" {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", audio.Offset), "-i", audio.Track)
+		afilter = audioFilter(audio, duration)
+	} else {
+		args = append(args, "-f", "lavfi",
+			"-i", "anullsrc=channel_layout=stereo:sample_rate=44100")
+	}
+	args = append(args,
 		"-t", fmt.Sprintf("%.3f", duration),
 		"-map", "0:v:0", "-map", "1:a:0",
+	)
+	if afilter != "" {
+		args = append(args, "-af", afilter)
+	}
+	args = append(args, []string{
 		"-vf", vf,
 		"-c:v", "libx264",
 		"-profile:v", "high",
@@ -82,7 +96,7 @@ func (p *Processor) Process(raw string, dev config.VideoDeviceConfig, outPath st
 		"-c:a", "aac", "-b:a", "128k", "-ar", "44100",
 		"-movflags", "+faststart",
 		outPath,
-	}
+	}...)
 	if out, err := exec.Command("ffmpeg", args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("ffmpeg failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -146,4 +160,26 @@ func requireAudioTrack(path string) error {
 			"previews without one", filepath.Base(path))
 	}
 	return nil
+}
+
+// audioFilter builds the -af chain: pad short tracks to length, then fade.
+func audioFilter(a *config.VideoAudioConfig, duration float64) string {
+	// apad first — a track shorter than the preview would otherwise end early
+	// and leave the tail with no audio stream, which is the rejection this all
+	// exists to avoid.
+	parts := []string{"apad"}
+	if a.Volume > 0 && a.Volume != 1 {
+		parts = append(parts, fmt.Sprintf("volume=%.3f", a.Volume))
+	}
+	if a.FadeIn > 0 {
+		parts = append(parts, fmt.Sprintf("afade=t=in:st=0:d=%.3f", a.FadeIn))
+	}
+	if a.FadeOut > 0 {
+		start := duration - a.FadeOut
+		if start < 0 {
+			start = 0
+		}
+		parts = append(parts, fmt.Sprintf("afade=t=out:st=%.3f:d=%.3f", start, a.FadeOut))
+	}
+	return strings.Join(parts, ",")
 }

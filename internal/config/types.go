@@ -149,6 +149,12 @@ type VideoConfig struct {
 	// Recording: how to get the app into the state worth filming.
 	Record *VideoRecordConfig `yaml:"record,omitempty"`
 
+	// Soundtrack. simctl records no audio at all, so without this a preview
+	// gets a silent track — required, since App Store Connect rejects a preview
+	// with no audio stream, but silent. Point this at the music the app itself
+	// plays and the preview carries it properly.
+	Audio *VideoAudioConfig `yaml:"audio,omitempty"`
+
 	// One entry per device family to publish a preview for. Keys match the
 	// device keys in devices.yaml.
 	Devices map[string]VideoDeviceConfig `yaml:"devices,omitempty"`
@@ -174,6 +180,26 @@ type VideoRecordConfig struct {
 	// run of a scene pays for shader and texture caches, and that hitching is
 	// otherwise the first thing a viewer sees.
 	WarmUp bool `yaml:"warm_up,omitempty"`
+}
+
+// VideoAudioConfig is the soundtrack laid under a preview.
+type VideoAudioConfig struct {
+	// Audio file to use. Anything ffmpeg can decode.
+	Track string `yaml:"track"`
+
+	// Seconds into the track to start. Use this to line the music up with what
+	// the recording actually shows: if the app starts its music at launch and
+	// the video is trimmed past the opening, the music needs the same offset or
+	// the preview opens mid-phrase.
+	Offset float64 `yaml:"offset,omitempty"`
+
+	// Fades, in seconds. A preview cut from the middle of a track otherwise
+	// starts and ends on a hard edit.
+	FadeIn  float64 `yaml:"fade_in,omitempty"`
+	FadeOut float64 `yaml:"fade_out,omitempty"`
+
+	// Playback gain, 1.0 leaves it alone.
+	Volume float64 `yaml:"volume,omitempty"`
 }
 
 // VideoDeviceConfig is the per-device output spec.
